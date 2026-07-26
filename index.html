@@ -1399,22 +1399,19 @@ window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
             <option value="lembar">lembar</option><option value="pack">pack</option><option value="set">set</option>
           </select>
         </div>
-        <div class="field"><label>Stok Saat Ini</label><input type="text" inputmode="numeric" id="mat-stock" placeholder="0"></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Stok Sudah Dibeli</label><input type="text" inputmode="numeric" id="mat-stock-purchased" placeholder="0"></div>
+        <div class="field"><label>Stok Belum Dibeli (dipesan)</label><input type="text" inputmode="numeric" id="mat-stock-pending" placeholder="0"></div>
       </div>
       <div class="field-row">
         <div class="field"><label>Harga per Satuan (Rp)</label><input type="text" inputmode="numeric" id="mat-unitcost" placeholder="0"></div>
         <div class="field"><label>Stok Minimum (alert)</label><input type="text" inputmode="numeric" id="mat-minstock" placeholder="0"></div>
       </div>
       <div class="field-row">
-        <div class="field"><label>Status Pembayaran</label>
-          <select id="mat-paymentstatus">
-            <option value="Sudah Dibeli">Sudah Dibeli</option>
-            <option value="Belum Dibeli">Belum Dibeli</option>
-          </select>
-        </div>
         <div class="field"><label>Link Pembelian (opsional)</label><input type="text" id="mat-purchaselink" placeholder="https://shopee.co.id/..."></div>
       </div>
-      <div class="datalist-hint">Cuma bahan berstatus "Sudah Dibeli" yang dihitung sebagai modal di ringkasan atas.</div>
+      <div class="datalist-hint">Satu bahan cukup satu baris — nggak perlu bikin baris terpisah buat status pembayaran beda. Cuma "Stok Sudah Dibeli" yang dihitung sebagai modal &amp; yang bisa dipakai di resep/Catat Produksi. "Stok Belum Dibeli" cuma catatan pesanan yang belum masuk, belum bisa dipotong ke produk.</div>
     </div>
     <div class="modal-body" style="padding-top:0;">
       <div class="modal-foot">
@@ -1459,7 +1456,7 @@ window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
         Tambah Bahan
       </button>
-      <div class="datalist-hint" style="margin-top:10px;">Atur resep sekali di sini. Nanti pas produksi, kamu cukup input jumlah produk jadi yang berhasil dibuat — bahan otomatis kepotong sesuai resep ini.</div>
+      <div class="datalist-hint" style="margin-top:10px;">Atur resep sekali di sini. Kalau kamu naikkan angka stok produk ini (langsung di sini atau lewat "Catat Produksi"), bahan otomatis kepotong sesuai resep ini — cuma dari stok bahan yang "Sudah Dibeli".</div>
     </div>
     <div class="modal-body" style="padding-top:0;">
       <div class="modal-foot">
@@ -1807,9 +1804,9 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
     const matRing = uid('MAT');
     return {
       materials: [
-        { id: matResin, name: 'Resin Bening (500ml)', unit: 'ml', stock: 2000, unitCost: 150, minStock: 300, updatedAt: today, paymentStatus: 'Sudah Dibeli', purchaseLink: '' },
-        { id: matBunga, name: 'Bunga Sakura Kering', unit: 'pcs', stock: 80, unitCost: 500, minStock: 20, updatedAt: today, paymentStatus: 'Sudah Dibeli', purchaseLink: '' },
-        { id: matRing, name: 'Gantungan Ring + Rantai', unit: 'pcs', stock: 150, unitCost: 800, minStock: 30, updatedAt: today, paymentStatus: 'Sudah Dibeli', purchaseLink: '' },
+        { id: matResin, name: 'Resin Bening (500ml)', unit: 'ml', stockPurchased: 2000, stockPending: 0, unitCost: 150, minStock: 300, updatedAt: today, purchaseLink: '' },
+        { id: matBunga, name: 'Bunga Sakura Kering', unit: 'pcs', stockPurchased: 80, stockPending: 0, unitCost: 500, minStock: 20, updatedAt: today, purchaseLink: '' },
+        { id: matRing, name: 'Gantungan Ring + Rantai', unit: 'pcs', stockPurchased: 150, stockPending: 0, unitCost: 800, minStock: 30, updatedAt: today, purchaseLink: '' },
       ],
       products: [
         { id: uid('PRD'), name: 'Bag Charm Sakura', sku: 'CH-SAK-01', stockTiktok: 5, stockShopee: 4, stockOffline: 3, costPrice: 8000, sellPrice: 25000, minStock: 5, updatedAt: today,
@@ -1840,9 +1837,55 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
   // migrasi data lama (format sebelum ada payment status / stok per channel / resep produksi) supaya tetap kompatibel
   function migrate() {
     state.materials.forEach((m) => {
-      if (m.paymentStatus === undefined) m.paymentStatus = 'Sudah Dibeli';
+      // migrasi format lama: satu baris stok + status pembayaran -> dua kolom stok (sudah/belum dibeli)
+      if (m.stockPurchased === undefined || m.stockPending === undefined) {
+        const legacyStock = typeof m.stock === 'number' ? m.stock : 0;
+        if (m.paymentStatus === 'Belum Dibeli') {
+          m.stockPurchased = m.stockPurchased ?? 0;
+          m.stockPending = m.stockPending ?? legacyStock;
+        } else {
+          m.stockPurchased = m.stockPurchased ?? legacyStock;
+          m.stockPending = m.stockPending ?? 0;
+        }
+      }
+      delete m.stock;
+      delete m.paymentStatus;
       if (m.purchaseLink === undefined) m.purchaseLink = '';
     });
+    // gabungkan bahan dengan nama sama (dulu bisa jadi duplikat gara-gara status pembayaran beda)
+    // supaya satu bahan cuma punya satu baris di tabel, dengan stok sudah/belum dibeli digabung.
+    (function mergeDuplicateMaterials() {
+      const byName = new Map();
+      const idRemap = {};
+      const merged = [];
+      state.materials.forEach((m) => {
+        const key = (m.name || '').trim().toLowerCase();
+        if (!key) { merged.push(m); return; }
+        if (byName.has(key)) {
+          const survivor = byName.get(key);
+          survivor.stockPurchased = (survivor.stockPurchased || 0) + (m.stockPurchased || 0);
+          survivor.stockPending = (survivor.stockPending || 0) + (m.stockPending || 0);
+          if (!survivor.purchaseLink && m.purchaseLink) survivor.purchaseLink = m.purchaseLink;
+          idRemap[m.id] = survivor.id;
+        } else {
+          byName.set(key, m);
+          merged.push(m);
+        }
+      });
+      if (Object.keys(idRemap).length) {
+        state.materials = merged;
+        state.products.forEach((p) => {
+          if (Array.isArray(p.recipe)) {
+            p.recipe.forEach((r) => { if (idRemap[r.materialId]) r.materialId = idRemap[r.materialId]; });
+          }
+        });
+        (state.productions || []).forEach((pro) => {
+          if (Array.isArray(pro.materialsUsed)) {
+            pro.materialsUsed.forEach((u) => { if (idRemap[u.materialId]) u.materialId = idRemap[u.materialId]; });
+          }
+        });
+      }
+    })();
     state.products.forEach((p) => {
       if (p.stockTiktok === undefined || p.stockShopee === undefined || p.stockOffline === undefined) {
         const legacyStock = typeof p.stock === 'number' ? p.stock : 0;
@@ -3154,11 +3197,10 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
     const el = document.getElementById('stockSummaryGrid');
     if (!el) return;
 
-    const purchasedMaterials = S.state.materials.filter((m) => m.paymentStatus !== 'Belum Dibeli');
-    const pendingMaterials = S.state.materials.filter((m) => m.paymentStatus === 'Belum Dibeli');
-    const totalMaterialValue = purchasedMaterials.reduce((sum, m) => sum + (m.stock * m.unitCost), 0);
-    const pendingMaterialValue = pendingMaterials.reduce((sum, m) => sum + (m.stock * m.unitCost), 0);
-    const lowMaterials = S.state.materials.filter((m) => m.stock <= m.minStock).length;
+    const pendingMaterials = S.state.materials.filter((m) => (m.stockPending || 0) > 0);
+    const totalMaterialValue = S.state.materials.reduce((sum, m) => sum + ((m.stockPurchased || 0) * m.unitCost), 0);
+    const pendingMaterialValue = S.state.materials.reduce((sum, m) => sum + ((m.stockPending || 0) * m.unitCost), 0);
+    const lowMaterials = S.state.materials.filter((m) => (m.stockPurchased || 0) <= m.minStock).length;
 
     const totalProductValue = S.state.products.reduce((sum, p) => sum + (S.totalStock(p) * p.costPrice), 0);
     const lowProducts = S.state.products.filter((p) => S.totalStock(p) <= p.minStock).length;
@@ -3210,21 +3252,22 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
       <div class="table-wrap">
         <table>
           <thead><tr>
-            <th>Nama Bahan</th><th>Stok</th><th>Satuan</th><th class="num-cell">Harga/Satuan</th>
-            <th class="num-cell">Nilai Stok</th><th>Pembayaran</th><th>Link</th><th>Status</th><th></th>
+            <th>Nama Bahan</th><th>Satuan</th><th class="num-cell">Stok Sudah Dibeli</th><th class="num-cell">Stok Belum Dibeli</th><th class="num-cell">Harga/Satuan</th>
+            <th class="num-cell">Nilai Stok</th><th>Link</th><th>Status</th><th></th>
           </tr></thead>
           <tbody>
             ${S.state.materials.map((m) => {
-              const isLow = m.stock <= m.minStock;
-              const isPending = m.paymentStatus === 'Belum Dibeli';
+              const purchased = m.stockPurchased || 0;
+              const pending = m.stockPending || 0;
+              const isLow = purchased <= m.minStock;
               return `
               <tr>
                 <td class="title-cell">${esc(m.name)}</td>
-                <td class="num-cell">${m.stock.toLocaleString('id-ID')}</td>
                 <td>${esc(m.unit)}</td>
+                <td class="num-cell">${purchased.toLocaleString('id-ID')}</td>
+                <td class="num-cell">${pending > 0 ? `<span class="badge-low">${pending.toLocaleString('id-ID')}</span>` : `<span style="color:var(--ink-faint);">0</span>`}</td>
                 <td class="num-cell">${rp(m.unitCost)}</td>
-                <td class="num-cell">${rp(m.stock * m.unitCost)}</td>
-                <td>${isPending ? `<span class="badge-low">Belum Dibeli</span>` : `<span class="badge-ok">Sudah Dibeli</span>`}</td>
+                <td class="num-cell">${rp(purchased * m.unitCost)}</td>
                 <td>${m.purchaseLink ? `<a href="${esc(m.purchaseLink)}" target="_blank" rel="noopener noreferrer" class="btn-icon" style="display:inline-flex;" aria-label="Buka link pembelian" title="${esc(m.purchaseLink)}">${ICON.link}</a>` : `<span style="color:var(--ink-faint);font-size:12px;">–</span>`}</td>
                 <td>${isLow ? `<span class="badge-low">Menipis</span>` : `<span class="badge-ok">Aman</span>`}</td>
                 <td>
@@ -3248,10 +3291,10 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
     document.getElementById('matModalTitle').textContent = item ? 'Ubah Bahan Baku' : 'Tambah Bahan Baku';
     document.getElementById('mat-name').value = item ? item.name : '';
     document.getElementById('mat-unit').value = item ? item.unit : 'pcs';
-    document.getElementById('mat-stock').value = item ? item.stock : '';
+    document.getElementById('mat-stock-purchased').value = item ? (item.stockPurchased || 0) : '';
+    document.getElementById('mat-stock-pending').value = item ? (item.stockPending || 0) : '';
     document.getElementById('mat-unitcost').value = item ? item.unitCost : '';
     document.getElementById('mat-minstock').value = item ? item.minStock : '';
-    document.getElementById('mat-paymentstatus').value = item ? (item.paymentStatus || 'Sudah Dibeli') : 'Sudah Dibeli';
     document.getElementById('mat-purchaselink').value = item ? (item.purchaseLink || '') : '';
     document.getElementById('btnDeleteMatInModal').style.display = item ? 'inline-flex' : 'none';
     document.getElementById('materialModalOverlay').classList.add('open');
@@ -3268,10 +3311,10 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
     const data = {
       name,
       unit: document.getElementById('mat-unit').value,
-      stock: numOrZero(document.getElementById('mat-stock').value),
+      stockPurchased: numOrZero(document.getElementById('mat-stock-purchased').value),
+      stockPending: numOrZero(document.getElementById('mat-stock-pending').value),
       unitCost: numOrZero(document.getElementById('mat-unitcost').value),
       minStock: numOrZero(document.getElementById('mat-minstock').value),
-      paymentStatus: document.getElementById('mat-paymentstatus').value,
       purchaseLink: document.getElementById('mat-purchaselink').value.trim(),
       updatedAt: S.todayStr(),
     };
@@ -3280,9 +3323,21 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
       if (idx > -1) S.state.materials[idx] = Object.assign({}, S.state.materials[idx], data);
       window.__charmory.showToast('Bahan baku diperbarui.', 'success');
     } else {
-      data.id = S.uid('MAT');
-      S.state.materials.push(data);
-      window.__charmory.showToast('Bahan baku ditambahkan.', 'success');
+      // kalau nama bahan sudah ada, gabungkan stoknya ke baris yang sama biar nggak duplikat
+      const existing = S.state.materials.find((m) => m.name.trim().toLowerCase() === name.toLowerCase());
+      if (existing) {
+        existing.stockPurchased = (existing.stockPurchased || 0) + data.stockPurchased;
+        existing.stockPending = (existing.stockPending || 0) + data.stockPending;
+        existing.unitCost = data.unitCost || existing.unitCost;
+        existing.minStock = data.minStock || existing.minStock;
+        existing.purchaseLink = data.purchaseLink || existing.purchaseLink;
+        existing.updatedAt = data.updatedAt;
+        window.__charmory.showToast('Bahan sudah ada — stoknya digabung ke baris yang sama.', 'success');
+      } else {
+        data.id = S.uid('MAT');
+        S.state.materials.push(data);
+        window.__charmory.showToast('Bahan baku ditambahkan.', 'success');
+      }
     }
     S.persist();
     closeMaterialModal();
@@ -3347,7 +3402,7 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
   /* ---------- RESEP BAHAN (BOM) PER PRODUK ---------- */
   function materialOptionsHtml(selectedId) {
     if (!S.state.materials.length) return `<option value="">Belum ada bahan baku</option>`;
-    return S.state.materials.map((m) => `<option value="${m.id}" ${m.id === selectedId ? 'selected' : ''}>${esc(m.name)} (${esc(m.unit)})</option>`).join('');
+    return S.state.materials.map((m) => `<option value="${m.id}" ${m.id === selectedId ? 'selected' : ''}>${esc(m.name)} (${esc(m.unit)}) — tersedia: ${(m.stockPurchased || 0).toLocaleString('id-ID')}</option>`).join('');
   }
   function recipeRowHtml(r) {
     const row = r || { materialId: '', qty: '' };
@@ -3407,26 +3462,57 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
       const qty = numOrZero(row.querySelector('.recipe-qty').value);
       if (materialId && qty > 0) recipe.push({ materialId, qty });
     });
+
+    const newStockTiktok = numOrZero(document.getElementById('prd-stock-tiktok').value);
+    const newStockShopee = numOrZero(document.getElementById('prd-stock-shopee').value);
+    const newStockOffline = numOrZero(document.getElementById('prd-stock-offline').value);
+    const newTotal = newStockTiktok + newStockShopee + newStockOffline;
+
+    // kalau ini produk lama, bandingkan stok baru vs stok lama -> selisih naik = jumlah pcs yang baru "diproduksi"
+    const existingProduct = editingProductId ? S.state.products.find(p => p.id === editingProductId) : null;
+    const oldTotal = existingProduct ? S.totalStock(existingProduct) : 0;
+    const deltaQty = newTotal - oldTotal;
+
+    // kalau stok produk jadi nambah & produk ini punya resep, potong bahan otomatis sesuai rumus resep x jumlah tambahan
+    let usage = [];
+    if (deltaQty > 0 && recipe.length) {
+      usage = recipeUsageForQty({ recipe }, deltaQty);
+      const insufficient = usage.filter((u) => !u.ok);
+      if (insufficient.length) {
+        window.__charmory.showToast(`Stok bahan "Sudah Dibeli" nggak cukup buat nambah ${deltaQty} pcs stok produk ini: ${insufficient.map((u) => u.name).join(', ')}. Update stok bahan dulu ya.`, 'danger');
+        return;
+      }
+    }
+
     const data = {
       name,
       sku: document.getElementById('prd-sku').value.trim(),
-      stockTiktok: numOrZero(document.getElementById('prd-stock-tiktok').value),
-      stockShopee: numOrZero(document.getElementById('prd-stock-shopee').value),
-      stockOffline: numOrZero(document.getElementById('prd-stock-offline').value),
+      stockTiktok: newStockTiktok,
+      stockShopee: newStockShopee,
+      stockOffline: newStockOffline,
       costPrice: numOrZero(document.getElementById('prd-costprice').value),
       sellPrice: numOrZero(document.getElementById('prd-sellprice').value),
       minStock: numOrZero(document.getElementById('prd-minstock').value),
       recipe,
       updatedAt: S.todayStr(),
     };
+
+    if (usage.length) {
+      usage.forEach((u) => {
+        const mat = S.state.materials.find((m) => m.id === u.materialId);
+        if (mat) { mat.stockPurchased = (mat.stockPurchased || 0) - u.needed; mat.updatedAt = S.todayStr(); }
+      });
+    }
+
+    const cutNote = usage.length ? ` ${deltaQty} pcs stok baru, bahan otomatis terpotong sesuai resep.` : '';
     if (editingProductId) {
       const idx = S.state.products.findIndex(p => p.id === editingProductId);
       if (idx > -1) S.state.products[idx] = Object.assign({}, S.state.products[idx], data);
-      window.__charmory.showToast('Produk diperbarui.', 'success');
+      window.__charmory.showToast('Produk diperbarui.' + cutNote, 'success');
     } else {
       data.id = S.uid('PRD');
       S.state.products.push(data);
-      window.__charmory.showToast('Produk ditambahkan.', 'success');
+      window.__charmory.showToast('Produk ditambahkan.' + cutNote, 'success');
     }
     S.persist();
     closeProductModal();
@@ -3447,8 +3533,8 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
         unit: mat ? mat.unit : '',
         perUnit: r.qty || 0,
         needed,
-        available: mat ? mat.stock : 0,
-        ok: !!mat && mat.stock >= needed,
+        available: mat ? (mat.stockPurchased || 0) : 0,
+        ok: !!mat && (mat.stockPurchased || 0) >= needed,
       };
     });
   }
@@ -3525,7 +3611,7 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
 
     usage.forEach((u) => {
       const mat = S.state.materials.find((m) => m.id === u.materialId);
-      if (mat) { mat.stock -= u.needed; mat.updatedAt = S.todayStr(); }
+      if (mat) { mat.stockPurchased = (mat.stockPurchased || 0) - u.needed; mat.updatedAt = S.todayStr(); }
     });
     product[channelField] = (product[channelField] || 0) + qty;
     product.updatedAt = S.todayStr();
@@ -3589,9 +3675,9 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
   function downloadMaterialTemplate() {
     if (!ensureXLSX()) return;
     const wsData = [
-      ['Nama Bahan', 'Satuan', 'Stok', 'Harga Satuan', 'Stok Minimum', 'Status Pembayaran', 'Link Pembelian'],
-      ['Resin Epoxy', 'ml', 500, 150, 200, 'Sudah Dibeli', ''],
-      ['Bunga Kering Sakura', 'pcs', 80, 500, 30, 'Sudah Dibeli', ''],
+      ['Nama Bahan', 'Satuan', 'Stok Sudah Dibeli', 'Stok Belum Dibeli', 'Harga Satuan', 'Stok Minimum', 'Link Pembelian'],
+      ['Resin Epoxy', 'ml', 500, 0, 150, 200, ''],
+      ['Bunga Kering Sakura', 'pcs', 80, 0, 500, 30, ''],
     ];
     const ws = XLSX.utils.aoa_to_sheet(wsData);
     const wb = XLSX.utils.book_new();
@@ -3625,19 +3711,29 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
           const name = String(pickField(row, ['nama bahan', 'nama', 'name']) || '').trim();
           if (!name) return;
           const unit = String(pickField(row, ['satuan', 'unit']) || 'pcs').trim() || 'pcs';
-          const stock = numOrZero(pickField(row, ['stok', 'stok saat ini', 'stock']));
+          const hasNewCols = pickField(row, ['stok sudah dibeli', 'stockpurchased']) !== undefined || pickField(row, ['stok belum dibeli', 'stockpending']) !== undefined;
+          let stockPurchased, stockPending;
+          if (hasNewCols) {
+            stockPurchased = numOrZero(pickField(row, ['stok sudah dibeli', 'stockpurchased']));
+            stockPending = numOrZero(pickField(row, ['stok belum dibeli', 'stockpending']));
+          } else {
+            // fallback buat template lama (kolom "Stok" + "Status Pembayaran")
+            const legacyStock = numOrZero(pickField(row, ['stok', 'stok saat ini', 'stock']));
+            const paymentStatusRaw = String(pickField(row, ['status pembayaran', 'paymentstatus']) || 'Sudah Dibeli').trim();
+            const isPending = /belum/i.test(paymentStatusRaw);
+            stockPurchased = isPending ? 0 : legacyStock;
+            stockPending = isPending ? legacyStock : 0;
+          }
           const unitCost = numOrZero(pickField(row, ['harga satuan', 'harga per satuan', 'harga/satuan', 'unitcost', 'harga']));
           const minStock = numOrZero(pickField(row, ['stok minimum', 'stok minimum (alert)', 'minstock']));
-          const paymentStatusRaw = String(pickField(row, ['status pembayaran', 'paymentstatus']) || 'Sudah Dibeli').trim();
-          const paymentStatus = /belum/i.test(paymentStatusRaw) ? 'Belum Dibeli' : 'Sudah Dibeli';
           const purchaseLink = String(pickField(row, ['link pembelian', 'link', 'purchaselink']) || '').trim();
 
           const existing = S.state.materials.find((m) => m.name.trim().toLowerCase() === name.toLowerCase());
           if (existing) {
-            Object.assign(existing, { unit, stock, unitCost, minStock, paymentStatus, purchaseLink, updatedAt: S.todayStr() });
+            Object.assign(existing, { unit, stockPurchased, stockPending, unitCost, minStock, purchaseLink, updatedAt: S.todayStr() });
             updated++;
           } else {
-            S.state.materials.push({ id: S.uid('MAT'), name, unit, stock, unitCost, minStock, paymentStatus, purchaseLink, updatedAt: S.todayStr() });
+            S.state.materials.push({ id: S.uid('MAT'), name, unit, stockPurchased, stockPending, unitCost, minStock, purchaseLink, updatedAt: S.todayStr() });
             added++;
           }
         });
@@ -4783,7 +4879,7 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
       if (el) el.textContent = `${cpStats.totalPosted}/${C.TOTAL_TARGET}`;
     }
     if (S) {
-      const lowCount = S.state.products.filter((p) => S.totalStock(p) <= p.minStock).length + S.state.materials.filter((m) => m.stock <= m.minStock).length;
+      const lowCount = S.state.products.filter((p) => S.totalStock(p) <= p.minStock).length + S.state.materials.filter((m) => (m.stockPurchased || 0) <= m.minStock).length;
       const el = document.querySelector('#hubStatStock b');
       if (el) el.textContent = lowCount > 0 ? `${lowCount} item` : 'Aman';
     }
@@ -4806,20 +4902,20 @@ async function initLogin() {
   });
 
   // 3. Tombol Google Login
-  document.getElementById('btnGoogleLogin').addEventListener('click', async () => {
+document.getElementById('btnGoogleLogin').addEventListener('click', async () => {
     const { error } = await window.supabaseClient.auth.signInWithOAuth({
-      provider: 'google',
-      options: {
-      // Baris ini yang paling penting agar kembali ke alamat web yang benar
+        provider: 'google',
+        options: {
+        // Baris ini yang paling penting agar kembali ke alamat web yang benar
         redirectTo: window.location.origin + window.location.pathname
-      }
+        }
     });
   
     if (error) {
-      console.error('Error saat login:', error.message);
-      alert('Gagal login: ' + error.message);
+        console.error('Error saat login:', error.message);
+        alert('Gagal login: ' + error.message);
     }
-  });
+    });
 
   // 4. Tombol Logout
   const btnLogout = document.getElementById('btnLogout');
