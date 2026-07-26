@@ -108,25 +108,90 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   gap:28px;
   position:sticky;
   top:0;
-  height:100vh;
+  align-self:stretch;
+  min-height:100vh;
+  height:auto;
   overflow-y:auto;
 }
 @media (max-width:900px){
   .sidebar{
-    position:static;
-    height:auto;
-    border-right:none;
-    border-bottom:1px solid var(--line);
-    flex-direction:row;
-    align-items:center;
-    padding:16px 18px;
-    gap:14px;
-    overflow-x:auto;
-    min-width:0;
-    width:100%;
+    position:fixed;
+    top:0; left:0;
+    height:100vh;
+    width:82vw;
+    max-width:300px;
+    border-right:1px solid var(--line);
+    border-bottom:none;
+    flex-direction:column;
+    align-items:stretch;
+    padding:26px 20px;
+    gap:20px;
+    overflow-y:auto;
+    overflow-x:hidden;
+    transform:translateX(-105%);
+    transition:transform .28s ease;
+    z-index:1000;
+    box-shadow:var(--shadow-lg);
   }
-  .nav{ flex:1; min-width:0; }
+  .sidebar.open{ transform:translateX(0); }
+  .nav{ flex-direction:column; }
 }
+.sidebar-close-btn{
+  display:none;
+  align-items:center;justify-content:center;
+  width:34px;height:34px;flex:none;
+  border-radius:var(--radius-sm);
+  border:1px solid var(--line);
+  background:var(--paper);
+  color:var(--ink-soft);
+  position:absolute;
+  top:18px; right:18px;
+}
+.sidebar-close-btn:hover{background:var(--bg-alt);color:var(--ink);}
+.sidebar-close-btn svg{width:18px;height:18px;}
+@media (max-width:900px){ .sidebar-close-btn{display:flex;} }
+
+.sidebar-backdrop{
+  display:none;
+  position:fixed;
+  inset:0;
+  background:rgba(43,35,32,.4);
+  z-index:900;
+}
+.sidebar-backdrop.open{ display:block; }
+
+.mobile-topbar{
+  display:none;
+  align-items:center;
+  gap:12px;
+  padding:14px 18px;
+  background:var(--paper);
+  border-bottom:1px solid var(--line);
+  position:sticky;
+  top:0;
+  z-index:500;
+}
+@media (max-width:900px){ .mobile-topbar{display:flex;} }
+.hamburger-btn{
+  display:flex;align-items:center;justify-content:center;
+  width:38px;height:38px;flex:none;
+  border-radius:var(--radius-sm);
+  border:1px solid var(--line);
+  background:var(--paper);
+  color:var(--ink);
+}
+.hamburger-btn:hover{background:var(--bg-alt);}
+.hamburger-btn:active{transform:scale(.96);}
+.hamburger-btn svg{width:20px;height:20px;}
+.mobile-topbar-brand{display:flex;align-items:center;gap:10px;}
+.mobile-topbar-title{
+  font-family:'Fraunces',serif;
+  font-weight:600;
+  font-size:16px;
+  color:var(--ink);
+  line-height:1.1;
+}
+.mobile-topbar-tag{font-size:10.5px;color:var(--ink-faint);letter-spacing:.03em;text-transform:uppercase;margin-top:1px;}
 .brand{
   display:flex;
   align-items:center;
@@ -142,10 +207,10 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
 .brand-mark svg{width:20px;height:20px;}
 .brand-text .name{font-family:'Fraunces',serif;font-weight:600;font-size:18px;line-height:1.1;}
 .brand-text .tag{font-size:11px;color:var(--ink-faint);letter-spacing:.04em;text-transform:uppercase;margin-top:2px;}
-@media (max-width:900px){ .brand-text{display:none;} }
+@media (max-width:900px){ /* brand-text tetap tampil di dalam drawer sidebar mobile */ }
 
 .nav{display:flex;flex-direction:column;gap:2px;}
-@media (max-width:900px){ .nav{flex-direction:row;} }
+@media (max-width:900px){ /* .nav tetap kolom vertikal di dalam drawer sidebar mobile */ }
 .nav-item{
   display:flex;align-items:center;gap:10px;
   padding:10px 12px;
@@ -170,7 +235,7 @@ button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible
   color:var(--ink-faint);
   line-height:1.5;
 }
-@media (max-width:900px){ .sidebar-foot{display:none;} }
+@media (max-width:900px){ /* sidebar-foot tetap tampil di dalam drawer sidebar mobile */ }
 
 /* ---- Main ---- */
 .main{
@@ -895,6 +960,7 @@ window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
 
 </head>
 <body>
+<div class="sidebar-backdrop" id="sidebarBackdrop" data-close-sidebar></div>
 
 <!-- ============================================================
      SCREEN: LOGIN
@@ -980,9 +1046,21 @@ window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
      SCREEN: CONTENT PLANNER (modul yang sudah ada)
      ============================================================ -->
 <div class="screen" id="screen-content-planner">
+<div class="mobile-topbar">
+  <button class="hamburger-btn" data-open-sidebar aria-label="Buka menu">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+  </button>
+  <div class="mobile-topbar-brand">
+    <div class="mobile-topbar-title">Charmory</div>
+    <div class="mobile-topbar-tag">Content Studio</div>
+  </div>
+</div>
 <div class="app-shell">
   <!-- ============ SIDEBAR ============ -->
   <aside class="sidebar">
+    <button class="sidebar-close-btn" data-close-sidebar aria-label="Tutup menu">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
     <div class="brand">
       <div class="brand-mark">
         <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M12 12v9"/><path d="M8 21h8"/></svg>
@@ -1018,7 +1096,7 @@ window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
         Analitik
       </button>
     </nav>
-    <div class="sidebar-foot hide-mobile">
+    <div class="sidebar-foot">
       Data tersimpan otomatis di browser ini. Buka halaman <b>Semua Konten</b> untuk ekspor rutin ke CSV/Excel supaya nggak hilang.
     </div>
   </aside>
@@ -1312,8 +1390,20 @@ window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
      SCREEN: STOCK MANAGEMENT
      ============================================================ -->
 <div class="screen" id="screen-stock">
+<div class="mobile-topbar">
+  <button class="hamburger-btn" data-open-sidebar aria-label="Buka menu">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+  </button>
+  <div class="mobile-topbar-brand">
+    <div class="mobile-topbar-title">Charmory</div>
+    <div class="mobile-topbar-tag">Stock Management</div>
+  </div>
+</div>
 <div class="app-shell">
   <aside class="sidebar">
+    <button class="sidebar-close-btn" data-close-sidebar aria-label="Tutup menu">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
     <div class="brand">
       <div class="brand-mark" style="background:linear-gradient(135deg,var(--sage) 0%,var(--sage-deep) 100%);">
         <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z"/><path d="m3.3 7 8.7 5 8.7-5"/><path d="M12 22V12"/></svg>
@@ -1341,7 +1431,7 @@ window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
         Target Harian
       </button>
     </nav>
-    <div class="sidebar-foot hide-mobile">
+    <div class="sidebar-foot">
       Harga modal produk di sini otomatis dipakai buat hitung untung-rugi di Progress Penjualan.
     </div>
   </aside>
@@ -1548,8 +1638,20 @@ window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
      SCREEN: PROGRESS PENJUALAN
      ============================================================ -->
 <div class="screen" id="screen-sales">
+<div class="mobile-topbar">
+  <button class="hamburger-btn" data-open-sidebar aria-label="Buka menu">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+  </button>
+  <div class="mobile-topbar-brand">
+    <div class="mobile-topbar-title">Charmory</div>
+    <div class="mobile-topbar-tag">Progress Penjualan</div>
+  </div>
+</div>
 <div class="app-shell">
   <aside class="sidebar">
+    <button class="sidebar-close-btn" data-close-sidebar aria-label="Tutup menu">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18M6 6l12 12"/></svg>
+    </button>
     <div class="brand">
       <div class="brand-mark" style="background:linear-gradient(135deg,#E8B074 0%,var(--amber) 100%);">
         <svg viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m19 9-5 5-4-4-3 3"/></svg>
@@ -1577,7 +1679,7 @@ window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
         Laporan
       </button>
     </nav>
-    <div class="sidebar-foot hide-mobile">
+    <div class="sidebar-foot">
       Untung dihitung otomatis dari harga jual dikurangi harga modal produk di Stock Management.
     </div>
   </aside>
@@ -2071,6 +2173,22 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
     state.expenses = (stored && Array.isArray(stored.expenses)) ? stored.expenses : [];
 
     if (!stored) persist();
+    autoSkipOverdueItems();
+  }
+
+  // kalau tanggal kontennya udah lewat hari ini tapi statusnya masih "Direncanakan"/"Siap posting"
+  // (belum diupload), otomatis ubah jadi "Dilewati" biar nggak nyangkut di status lama terus.
+  function autoSkipOverdueItems() {
+    const today = todayStr();
+    let changed = false;
+    state.items.forEach((it) => {
+      if ((it.status === 'planned' || it.status === 'ready') && it.date && it.date < today) {
+        it.status = 'skipped';
+        changed = true;
+      }
+    });
+    if (changed) persist();
+    return changed;
   }
 
   function persist() {
@@ -2207,7 +2325,7 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
   // expose namespace early (rest of the file attaches to this)
   window.__charmory = {
     STORAGE_KEY, TARGETS, TOTAL_TARGET, PLATFORM_META, STATUS_META, MONTH_SHORT, DAY_NAMES_ID, ICONS, EXPENSE_CATEGORIES,
-    state, loadState, persist, uid, parseDate, fmtDateShort, fmtDateLong, todayStr, isSameDay, isoOffset,
+    state, loadState, persist, uid, parseDate, fmtDateShort, fmtDateLong, todayStr, isSameDay, isoOffset, autoSkipOverdueItems,
     escapeHtml, num, fmtNum, fmtRupiah, fmtRupiahSigned, getWeekRange, getMonthRange, inRange, debounce, showToast,
   };
 })();
@@ -3080,6 +3198,7 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
   const C = window.__charmory;
 
   function switchPage(pageName) {
+    C.autoSkipOverdueItems();
     document.querySelectorAll('.page').forEach((p) => p.classList.remove('active'));
     document.querySelectorAll('.nav-item').forEach((n) => n.classList.remove('active'));
     const target = document.getElementById('page-' + pageName);
@@ -3103,6 +3222,7 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
   }
 
   function refreshAll() {
+    C.autoSkipOverdueItems();
     window.__charmoryDashboard.renderDashboard();
     window.__charmoryJadwal.renderJadwal();
     window.__charmoryKonten.renderContentGrid();
@@ -4874,9 +4994,10 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
 
   function renderHome() {
     if (window.__charmoryDashboard) {
+      C.autoSkipOverdueItems();
       const cpStats = window.__charmoryDashboard.computeStats();
       const el = document.querySelector('#hubStatContent b');
-      if (el) el.textContent = `${cpStats.totalPosted}/${C.TOTAL_TARGET}`;
+      if (el) el.textContent = `${cpStats.totalPosted}/${cpStats.totalPlanned}`;
     }
     if (S) {
       const lowCount = S.state.products.filter((p) => S.totalStock(p) <= p.minStock).length + S.state.materials.filter((m) => (m.stockPurchased || 0) <= m.minStock).length;
@@ -4902,20 +5023,22 @@ async function initLogin() {
   });
 
   // 3. Tombol Google Login
-document.getElementById('btnGoogleLogin').addEventListener('click', async () => {
-    const { error } = await window.supabaseClient.auth.signInWithOAuth({
+  const btnGoogleLogin = document.getElementById('btnGoogleLogin');
+  if (btnGoogleLogin) {
+    btnGoogleLogin.addEventListener('click', async () => {
+      const { error } = await window.supabaseClient.auth.signInWithOAuth({
         provider: 'google',
         options: {
-        // Baris ini yang paling penting agar kembali ke alamat web yang benar
-        redirectTo: window.location.origin + window.location.pathname
+          // Menentukan halaman tujuan tepat setelah login dari Google berhasil
+          redirectTo: window.location.origin + window.location.pathname
         }
-    });
-  
-    if (error) {
-        console.error('Error saat login:', error.message);
+      });
+      
+      if (error) {
         alert('Gagal login: ' + error.message);
-    }
+      }
     });
+  }
 
   // 4. Tombol Logout
   const btnLogout = document.getElementById('btnLogout');
@@ -4959,12 +5082,45 @@ function handleUserSession(session) {
     });
   }
 
+  function closeSidebar() {
+    document.querySelectorAll('.sidebar.open').forEach((sb) => sb.classList.remove('open'));
+    const backdrop = document.getElementById('sidebarBackdrop');
+    if (backdrop) backdrop.classList.remove('open');
+    document.body.style.overflow = '';
+  }
+
+  function openSidebar(triggerBtn) {
+    const screen = triggerBtn.closest('.screen');
+    const sidebar = screen ? screen.querySelector('.sidebar') : null;
+    if (!sidebar) return;
+    sidebar.classList.add('open');
+    const backdrop = document.getElementById('sidebarBackdrop');
+    if (backdrop) backdrop.classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+
+  function initSidebarToggle() {
+    document.querySelectorAll('[data-open-sidebar]').forEach((btn) => {
+      btn.addEventListener('click', () => openSidebar(btn));
+    });
+    document.querySelectorAll('[data-close-sidebar]').forEach((el) => {
+      el.addEventListener('click', closeSidebar);
+    });
+    // tutup drawer otomatis begitu salah satu menu/beranda dipilih di mobile
+    document.querySelectorAll('.sidebar .nav-item, .sidebar .back-hub-btn').forEach((el) => {
+      el.addEventListener('click', () => { if (window.innerWidth <= 900) closeSidebar(); });
+    });
+    // kalau layar di-resize balik ke ukuran desktop, pastikan drawer nggak nyangkut kebuka
+    window.addEventListener('resize', () => { if (window.innerWidth > 900) closeSidebar(); });
+  }
+
   function initGlobalEscape() {
     document.addEventListener('keydown', (e) => {
       if (e.key !== 'Escape') return;
       document.querySelectorAll('.modal-overlay.open').forEach((ov) => {
         ov.classList.remove('open');
       });
+      closeSidebar();
       document.body.style.overflow = '';
     });
   }
@@ -4978,6 +5134,7 @@ function handleUserSession(session) {
 
     initLogin();
     initModuleCards();
+    initSidebarToggle();
     initGlobalEscape();
   }
 
