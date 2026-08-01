@@ -1,3 +1,5 @@
+
+
 <!DOCTYPE html>
 <html lang="id">
 <head>
@@ -1024,11 +1026,15 @@ td.actions-cell .btn-icon svg{width:13px;height:13px;}
 .txn-totals .row{display:flex;justify-content:space-between;color:var(--ink-soft);}
 .txn-totals .row.grand{font-size:16px;font-weight:800;color:var(--ink);padding-top:8px;border-top:1px solid var(--line-soft);margin-top:4px;}
 .txn-item-row{
-  display:grid;grid-template-columns:1.6fr 1fr .7fr .9fr .8fr auto;gap:8px;align-items:flex-end;
-  padding:10px 0;border-bottom:1px solid var(--line-soft);
+  padding:12px 0;border-bottom:1px solid var(--line-soft);
 }
 .txn-item-row:first-child{padding-top:0;}
-@media (max-width:720px){ .txn-item-row{grid-template-columns:1fr 1fr;} }
+.txn-item-line-top{display:grid;grid-template-columns:1.3fr 1fr 1.3fr;gap:8px;margin-bottom:8px;align-items:flex-end;}
+.txn-item-line-bottom{display:grid;grid-template-columns:.7fr 1fr 1fr auto;gap:8px;align-items:flex-end;}
+@media (max-width:640px){
+  .txn-item-line-top{grid-template-columns:1fr 1fr;}
+  .txn-item-line-bottom{grid-template-columns:1fr 1fr;}
+}
 .txn-item-subtotal{font-size:11.5px;color:var(--ink-faint);grid-column:1/-1;text-align:right;}
 .txn-status-pill{font-size:10.5px;font-weight:800;padding:3px 9px;border-radius:99px;white-space:nowrap;}
 .txn-status-pill.completed{background:var(--sage-pale);color:var(--sage-deep);}
@@ -1817,7 +1823,16 @@ window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
       <div id="prd-stock-readonly-note" style="display:none;" class="datalist-hint">Stok produk ini sekarang dikelola lewat <strong>Adjustment</strong> dan <strong>Stock Opname</strong> di tab sebelah, bukan dari form ini — biar semua perubahan stok tercatat rapi di Mutasi Stok.</div>
       <div class="field-row">
         <div class="field"><label>Harga Modal / Unit (Rp)</label><input type="text" inputmode="numeric" id="prd-costprice" placeholder="0"></div>
-        <div class="field"><label>Harga Jual / Unit (Rp)</label><input type="text" inputmode="numeric" id="prd-sellprice" placeholder="0"></div>
+        <div class="field"><label>Harga Jual / Unit (Rp) <span class="hint">(harga default)</span></label><input type="text" inputmode="numeric" id="prd-sellprice" placeholder="0"></div>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;font-weight:600;font-size:12.5px;cursor:pointer;margin:4px 0 10px;">
+        <input type="checkbox" id="prd-use-channel-prices" style="width:16px;height:16px;">
+        Gunakan harga jual berbeda tiap channel
+      </label>
+      <div id="prd-channel-prices-section" style="display:none;">
+        <div class="field-section-label">Harga Jual per Channel</div>
+        <div id="prd-channel-prices-rows"></div>
+        <div class="datalist-hint" style="margin-top:2px;">Kosongkan channel tertentu buat pakai harga default di atas.</div>
       </div>
       <div class="field-section-label">Resep Bahan (dipakai otomatis saat Catat Produksi)</div>
       <div id="prd-recipe-rows"></div>
@@ -2385,6 +2400,7 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
       id: row.id, name: row.name, sku: row.sku || '',
       costPrice: Number(row.cost_price) || 0, sellPrice: Number(row.sell_price) || 0,
       minStock: Number(row.min_stock) || 0, recipe: Array.isArray(row.recipe) ? row.recipe : [],
+      channelPrices: (row.channel_prices && typeof row.channel_prices === 'object') ? row.channel_prices : {},
       updatedAt: row.updated_at,
     };
   }
@@ -2393,8 +2409,17 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
       name: p.name, sku: p.sku || null,
       cost_price: p.costPrice || 0, sell_price: p.sellPrice || 0,
       min_stock: p.minStock || 0, recipe: p.recipe || [],
+      channel_prices: p.channelPrices || {},
       updated_at: new Date().toISOString(),
     };
+  }
+  // harga jual efektif produk ini buat channel tertentu: pakai harga khusus channel
+  // kalau di-set, kalau nggak jatuh balik ke harga jual default produk.
+  function getEffectivePrice(productId, channelId) {
+    const product = state.products.find((p) => p.id === productId);
+    if (!product) return 0;
+    const override = channelId && product.channelPrices ? product.channelPrices[channelId] : undefined;
+    return (override !== undefined && override !== null && override !== '') ? Number(override) : product.sellPrice;
   }
   function movementRowToObj(row) {
     return {
@@ -2436,7 +2461,7 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
     return {
       id: row.id, transactionId: row.transaction_id, productId: row.product_id, locationId: row.location_id,
       qty: Number(row.qty) || 0, sellPrice: Number(row.sell_price) || 0, discount: Number(row.discount) || 0,
-      costPriceAtSale: Number(row.cost_price_at_sale) || 0,
+      costPriceAtSale: Number(row.cost_price_at_sale) || 0, contentItemId: row.content_item_id || null,
     };
   }
 
@@ -2831,7 +2856,8 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
       return {
         transaction_id: txnData.id, product_id: it.productId, location_id: it.locationId,
         qty: it.qty, sell_price: it.sellPrice, discount: it.discount || 0,
-        cost_price_at_sale: product ? product.costPrice : 0, user_id: window.__currentUserId,
+        cost_price_at_sale: product ? product.costPrice : 0, content_item_id: it.contentItemId || null,
+        user_id: window.__currentUserId,
       };
     });
     const { data: itemsData, error: itemsErr } = await sb.from('sales_transaction_items').insert(itemRows).select();
@@ -2937,7 +2963,7 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
   window.__stockSales = {
     STORE_KEY, EXPENSE_CATEGORIES, UNITS, PAYMENT_STATUSES, STOCK_CHANNELS,
     uid, todayStr, totalStock, availableStock, stockByLocation, stockBreakdown, reservedStock,
-    locationById, productById, channelById, materialById, state, load, persist,
+    locationById, productById, channelById, materialById, state, load, persist, getEffectivePrice,
     dbInsertLocation, dbRenameLocation, dbSetLocationActive,
     dbInsertProduct, dbUpdateProduct, dbDeleteProduct, dbInsertMovement,
     dbInsertAdjustment, dbStartOpnameSession, dbFinishOpname,
@@ -4375,22 +4401,47 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
     const windowDays = C.state.attributionWindowDays || 7;
     const posted = C.state.items.filter((it) => it.status === 'posted' && it.date && it.linkedProductId);
 
-    return posted.map((it) => {
-      const endDate = new Date(it.date + 'T00:00:00');
-      endDate.setDate(endDate.getDate() + windowDays);
-      const windowEnd = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
+    // item transaksi yang SUDAH ditandai langsung ke suatu konten (dari dropdown "Sumber Konten" saat Catat
+    // Transaksi) — ini dikeluarkan dari estimasi jendela waktu konten LAIN biar nggak kehitung dobel.
+    const directlyLinkedItemIds = new Set(
+      S.state.salesTransactionItems.filter((si) => si.contentItemId).map((si) => si.id)
+    );
 
-      const completedTxnIds = new Set(
-        S.state.salesTransactions.filter((t) => t.transactionStatus === 'completed' && t.date >= it.date && t.date <= windowEnd).map((t) => t.id)
-      );
-      const attributed = S.state.salesTransactionItems.filter((si) => si.productId === it.linkedProductId && completedTxnIds.has(si.transactionId));
-      const qty = attributed.reduce((sum, si) => sum + si.qty, 0);
-      const revenue = attributed.reduce((sum, si) => sum + (si.qty * si.sellPrice - si.discount), 0);
+    return posted.map((it) => {
+      // 1) Atribusi LANGSUNG: baris transaksi yang di-tag persis ke konten ini lewat "Sumber Konten"
+      const directItems = S.state.salesTransactionItems.filter((si) => si.contentItemId === it.id);
+      const directCompleted = directItems.filter((si) => {
+        const txn = S.state.salesTransactions.find((t) => t.id === si.transactionId);
+        return txn && txn.transactionStatus === 'completed';
+      });
+
+      let qty, revenue, isDirect;
+      if (directCompleted.length) {
+        qty = directCompleted.reduce((sum, si) => sum + si.qty, 0);
+        revenue = directCompleted.reduce((sum, si) => sum + (si.qty * si.sellPrice - si.discount), 0);
+        isDirect = true;
+      } else {
+        // 2) Fallback: estimasi jendela waktu (kalau belum ada yang ditandai langsung ke konten ini),
+        //    tapi jangan hitung baris yang sudah "diambil" konten lain lewat tag langsung.
+        const endDate = new Date(it.date + 'T00:00:00');
+        endDate.setDate(endDate.getDate() + windowDays);
+        const windowEnd = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
+        const completedTxnIds = new Set(
+          S.state.salesTransactions.filter((t) => t.transactionStatus === 'completed' && t.date >= it.date && t.date <= windowEnd).map((t) => t.id)
+        );
+        const attributed = S.state.salesTransactionItems.filter((si) =>
+          si.productId === it.linkedProductId && completedTxnIds.has(si.transactionId) && !directlyLinkedItemIds.has(si.id)
+        );
+        qty = attributed.reduce((sum, si) => sum + si.qty, 0);
+        revenue = attributed.reduce((sum, si) => sum + (si.qty * si.sellPrice - si.discount), 0);
+        isDirect = false;
+      }
+
       const product = (S.state.products || []).find((p) => p.id === it.linkedProductId) || null;
       const views = (it.metrics && it.metrics.views) || 0;
       const rpm = views > 0 ? Math.round((revenue / views) * 1000) : 0;
 
-      return { item: it, product, qty, revenue, rpm, views };
+      return { item: it, product, qty, revenue, rpm, views, isDirect };
     });
   }
 
@@ -4403,7 +4454,7 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
     if (!noteEl) return;
 
     const windowDays = C.state.attributionWindowDays || 7;
-    noteEl.textContent = `Model atribusi: penjualan produk yang sama dalam ${windowDays} hari setelah konten posting dianggap "terpengaruh" konten tersebut. Ini estimasi berbasis waktu & produk, bukan tracking klik eksak — kalau ada 2 konten mempromosikan produk yang sama berdekatan waktunya, satu penjualan bisa ikut terhitung di keduanya. Atur lama jendelanya di tombol "Atur Target".`;
+    noteEl.textContent = `Model atribusi: kalau saat "Catat Transaksi" kamu pilih "Sumber Konten", itu dipakai sebagai atribusi LANGSUNG (paling akurat). Kalau belum ditandai, sistem jatuh ke estimasi: penjualan produk yang sama dalam ${windowDays} hari setelah konten posting dianggap "terpengaruh" konten tersebut — bukan tracking klik eksak. Atur lama jendelanya di tombol "Atur Target".`;
 
     if (!S || !S.state) {
       statsEl.innerHTML = `<div class="empty-note">Modul Stock & Penjualan belum termuat.</div>`;
@@ -4449,7 +4500,7 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
         <div class="an-roi-row">
           <div class="an-roi-rank">${i + 1}</div>
           <div class="an-roi-info">
-            <div class="an-roi-title">${C.escapeHtml(r.item.title || 'Tanpa judul')}</div>
+            <div class="an-roi-title">${C.escapeHtml(r.item.title || 'Tanpa judul')} <span class="txn-status-pill ${r.isDirect ? 'completed' : 'pending'}" style="margin-left:4px;">${r.isDirect ? 'Langsung' : 'Estimasi'}</span></div>
             <div class="an-roi-meta">${r.item.platform} • ${r.product ? C.escapeHtml(r.product.name) : 'Produk terhapus'} • ${r.qty} pcs terjual</div>
           </div>
           <div class="an-roi-value">
@@ -4929,6 +4980,22 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
     bindRecipeRowEvents();
   }
 
+  function renderChannelPriceRows(existingPrices) {
+    const el = document.getElementById('prd-channel-prices-rows');
+    if (!el) return;
+    const activeChannels = S.state.salesChannels.filter((c) => c.isActive);
+    if (!activeChannels.length) {
+      el.innerHTML = `<div class="recipe-empty-note">Belum ada channel penjualan. Tambah dulu lewat "Kelola Channel" di halaman Progress Penjualan.</div>`;
+      return;
+    }
+    const prices = existingPrices || {};
+    el.innerHTML = `<div class="field-row-3">` + activeChannels.map((c) => `
+      <div class="field" data-channel-price-row data-channel-id="${c.id}">
+        <label>${esc(c.name)}</label>
+        <input type="text" inputmode="numeric" class="channel-price-input" placeholder="pakai default" value="${prices[c.id] !== undefined && prices[c.id] !== null ? prices[c.id] : ''}">
+      </div>`).join('') + `</div>`;
+  }
+
   function openProductModal(id) {
     editingProductId = id || null;
     const item = id ? S.state.products.find(p => p.id === id) : null;
@@ -4938,6 +5005,10 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
     document.getElementById('prd-minstock').value = item ? item.minStock : '';
     document.getElementById('prd-costprice').value = item ? item.costPrice : '';
     document.getElementById('prd-sellprice').value = item ? item.sellPrice : '';
+    const hasChannelPrices = !!(item && item.channelPrices && Object.keys(item.channelPrices).length);
+    document.getElementById('prd-use-channel-prices').checked = hasChannelPrices;
+    document.getElementById('prd-channel-prices-section').style.display = hasChannelPrices ? 'block' : 'none';
+    renderChannelPriceRows(item ? item.channelPrices : {});
     document.getElementById('prd-initial-stock-section').style.display = item ? 'none' : 'block';
     document.getElementById('prd-stock-readonly-note').style.display = item ? 'block' : 'none';
     if (!item) renderInitialStockRows();
@@ -4961,6 +5032,14 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
       if (materialId && qty > 0) recipe.push({ materialId, qty });
     });
 
+    const channelPrices = {};
+    if (document.getElementById('prd-use-channel-prices').checked) {
+      document.querySelectorAll('#prd-channel-prices-rows [data-channel-price-row]').forEach((row) => {
+        const val = row.querySelector('.channel-price-input').value;
+        if (val !== '' && val !== null) channelPrices[row.dataset.channelId] = numOrZero(val);
+      });
+    }
+
     const data = {
       name,
       sku: document.getElementById('prd-sku').value.trim(),
@@ -4968,6 +5047,7 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
       sellPrice: numOrZero(document.getElementById('prd-sellprice').value),
       minStock: numOrZero(document.getElementById('prd-minstock').value),
       recipe,
+      channelPrices,
     };
 
     const btnSave = document.getElementById('btnSavePrdModal');
@@ -5757,6 +5837,9 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
     document.getElementById('btnSavePrdModal').addEventListener('click', saveProduct);
     document.getElementById('btnDeletePrdInModal').addEventListener('click', () => { if (editingProductId) confirmDeleteGeneric('product', editingProductId, 'produk ini'); });
     document.getElementById('productModalOverlay').addEventListener('click', (e) => { if (e.target.id === 'productModalOverlay') closeProductModal(); });
+    document.getElementById('prd-use-channel-prices').addEventListener('change', (e) => {
+      document.getElementById('prd-channel-prices-section').style.display = e.target.checked ? 'block' : 'none';
+    });
     document.getElementById('btnAddRecipeRow').addEventListener('click', () => {
       document.getElementById('prd-recipe-rows').insertAdjacentHTML('beforeend', recipeRowHtml({ materialId: '', qty: '' }));
       bindRecipeRowEvents();
@@ -6327,15 +6410,17 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
               <tr class="txn-detail-row"><td colspan="8">
                 <div class="table-wrap">
                   <table>
-                    <thead><tr><th>Produk</th><th>Lokasi</th><th class="num-cell">Qty</th><th class="num-cell">Harga Jual</th><th class="num-cell">Diskon</th><th class="num-cell">Modal</th><th class="num-cell">Subtotal</th></tr></thead>
+                    <thead><tr><th>Produk</th><th>Lokasi</th><th>Sumber Konten</th><th class="num-cell">Qty</th><th class="num-cell">Harga Jual</th><th class="num-cell">Diskon</th><th class="num-cell">Modal</th><th class="num-cell">Subtotal</th></tr></thead>
                     <tbody>
                       ${items.map((it) => {
                         const product = S.productById(it.productId);
                         const loc = S.locationById(it.locationId);
+                        const contentItem = it.contentItemId && C.state.items ? C.state.items.find((ci) => ci.id === it.contentItemId) : null;
                         const subtotal = it.qty * it.sellPrice - it.discount;
                         return `<tr>
                           <td class="title-cell">${esc(product ? product.name : '(produk dihapus)')}</td>
                           <td>${esc(loc ? loc.name : '–')}</td>
+                          <td style="font-size:11.5px;color:var(--ink-faint);">${contentItem ? esc(contentItem.platform + ' · ' + (contentItem.title || 'Tanpa judul')) : '–'}</td>
                           <td class="num-cell">${it.qty}</td>
                           <td class="num-cell">${rp(it.sellPrice)}</td>
                           <td class="num-cell">${rp(it.discount)}</td>
@@ -6400,15 +6485,37 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
   function locationOptionsHtml(selectedId) {
     return S.state.locations.filter((l) => l.isActive).map((l) => `<option value="${l.id}" ${l.id === selectedId ? 'selected' : ''}>${esc(l.name)}</option>`).join('') || `<option value="">Belum ada lokasi</option>`;
   }
+  function contentOptionsHtml(referenceDate, selectedId) {
+    const C = window.__charmory;
+    if (!C) return `<option value="">- tidak ada -</option>`;
+    const ref = referenceDate || S.todayStr();
+    const refDate = new Date(ref + 'T00:00:00');
+    const startDate = new Date(refDate.getTime());
+    startDate.setDate(startDate.getDate() - 7);
+    const startStr = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}-${String(startDate.getDate()).padStart(2, '0')}`;
+    const recent = C.state.items
+      .filter((it) => it.status === 'posted' && it.date && it.date >= startStr && it.date <= ref)
+      .sort((a, b) => b.date.localeCompare(a.date));
+    if (!recent.length) return `<option value="">- tidak ada konten 7 hari terakhir -</option>`;
+    return `<option value="">- tidak ada -</option>` + recent.map((it) => {
+      const d = C.fmtDateShort(it.date);
+      return `<option value="${it.id}" ${it.id === selectedId ? 'selected' : ''}>${esc(it.platform)} · ${esc(it.title || 'Tanpa judul')} (${d.d} ${d.m})</option>`;
+    }).join('');
+  }
   function txnItemRowHtml() {
     return `
       <div class="txn-item-row" data-txn-item-row>
-        <div class="field"><label>Produk</label><select class="txn-row-product">${productOptionsHtml()}</select></div>
-        <div class="field"><label>Lokasi Stok</label><select class="txn-row-location">${locationOptionsHtml()}</select></div>
-        <div class="field"><label>Qty</label><input type="text" inputmode="numeric" class="txn-row-qty" value="1"></div>
-        <div class="field"><label>Harga Jual</label><input type="text" inputmode="numeric" class="txn-row-price" placeholder="0"></div>
-        <div class="field"><label>Diskon</label><input type="text" inputmode="numeric" class="txn-row-discount" placeholder="0"></div>
-        <button type="button" class="btn-icon txn-row-remove" aria-label="Hapus baris">${ICON.trash}</button>
+        <div class="txn-item-line-top">
+          <div class="field"><label>Produk</label><select class="txn-row-product">${productOptionsHtml()}</select></div>
+          <div class="field"><label>Lokasi Stok</label><select class="txn-row-location">${locationOptionsHtml()}</select></div>
+          <div class="field"><label>Sumber Konten <span class="hint">(opsional)</span></label><select class="txn-row-content">${contentOptionsHtml(document.getElementById('txn-date').value)}</select></div>
+        </div>
+        <div class="txn-item-line-bottom">
+          <div class="field"><label>Qty</label><input type="text" inputmode="numeric" class="txn-row-qty" value="1"></div>
+          <div class="field"><label>Harga Jual</label><input type="text" inputmode="numeric" class="txn-row-price" placeholder="0"></div>
+          <div class="field"><label>Diskon</label><input type="text" inputmode="numeric" class="txn-row-discount" placeholder="0"></div>
+          <button type="button" class="btn-icon txn-row-remove" aria-label="Hapus baris">${ICON.trash}</button>
+        </div>
         <div class="txn-item-subtotal"></div>
       </div>`;
   }
@@ -6419,23 +6526,35 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
     row.querySelector('.txn-item-subtotal').textContent = `Subtotal: ${rp(qty * price - discount)}`;
     updateTxnTotals();
   }
+  function applyEffectivePrice(row) {
+    const productId = row.querySelector('.txn-row-product').value;
+    if (!productId || row.dataset.priceEdited) return;
+    const channelId = document.getElementById('txn-channel').value;
+    row.querySelector('.txn-row-price').value = S.getEffectivePrice(productId, channelId);
+    updateTxnRowSubtotal(row);
+  }
   function bindTxnRowEvents() {
     document.querySelectorAll('#txn-item-rows [data-txn-item-row]').forEach((row) => {
       if (row.dataset.bound) return;
       row.dataset.bound = '1';
-      row.querySelector('.txn-row-product').addEventListener('change', () => {
-        const product = S.productById(row.querySelector('.txn-row-product').value);
-        if (product && !row.dataset.priceEdited) row.querySelector('.txn-row-price').value = product.sellPrice;
-        updateTxnRowSubtotal(row);
-      });
+      row.querySelector('.txn-row-product').addEventListener('change', () => applyEffectivePrice(row));
       row.querySelector('.txn-row-price').addEventListener('input', () => { row.dataset.priceEdited = '1'; updateTxnRowSubtotal(row); });
       row.querySelector('.txn-row-qty').addEventListener('input', () => updateTxnRowSubtotal(row));
       row.querySelector('.txn-row-discount').addEventListener('input', () => updateTxnRowSubtotal(row));
       row.querySelector('.txn-row-remove').addEventListener('click', () => { row.remove(); updateTxnTotals(); });
-      const initialProduct = S.productById(row.querySelector('.txn-row-product').value);
-      if (initialProduct && !row.querySelector('.txn-row-price').value) row.querySelector('.txn-row-price').value = initialProduct.sellPrice;
+      if (!row.querySelector('.txn-row-price').value) applyEffectivePrice(row);
       updateTxnRowSubtotal(row);
     });
+  }
+  function refreshAllRowContentOptions() {
+    const date = document.getElementById('txn-date').value;
+    document.querySelectorAll('#txn-item-rows [data-txn-item-row] .txn-row-content').forEach((sel) => {
+      const current = sel.value;
+      sel.innerHTML = contentOptionsHtml(date, current);
+    });
+  }
+  function refreshAllRowPrices() {
+    document.querySelectorAll('#txn-item-rows [data-txn-item-row]').forEach((row) => applyEffectivePrice(row));
   }
   function updateTxnTotals() {
     const el = document.getElementById('txn-totals');
@@ -6496,6 +6615,7 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
     document.querySelectorAll('#txn-item-rows [data-txn-item-row]').forEach((row) => {
       const productId = row.querySelector('.txn-row-product').value;
       const locationId = row.querySelector('.txn-row-location').value;
+      const contentItemId = row.querySelector('.txn-row-content').value || null;
       const qty = numOrZero(row.querySelector('.txn-row-qty').value);
       const sellPrice = numOrZero(row.querySelector('.txn-row-price').value);
       const discount = numOrZero(row.querySelector('.txn-row-discount').value);
@@ -6508,7 +6628,7 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
           stockError = `Stok "${product ? product.name : ''}" di lokasi ini cuma ${available}, nggak cukup buat ${qty}.`;
         }
       }
-      items.push({ productId, locationId, qty, sellPrice, discount });
+      items.push({ productId, locationId, contentItemId, qty, sellPrice, discount });
     });
 
     if (stockError) { C.showToast(stockError, 'danger'); return; }
@@ -7259,6 +7379,8 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
       bindTxnRowEvents();
     });
     document.getElementById('txn-admin-fee').addEventListener('input', updateTxnTotals);
+    document.getElementById('txn-channel').addEventListener('change', refreshAllRowPrices);
+    document.getElementById('txn-date').addEventListener('change', refreshAllRowContentOptions);
     document.getElementById('btnExportSalesExcel').addEventListener('click', exportSalesToExcel);
 
     document.getElementById('btnManageChannels').addEventListener('click', openChannelModal);
