@@ -10,6 +10,7 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <style>
 /* ============ DESIGN TOKENS ============
    Color: --bg #FFF8F3 (krem resin muda) · --ink #2B2320 (coklat gelap)
@@ -999,6 +1000,8 @@ td.actions-cell .btn-icon svg{width:13px;height:13px;}
 
 /* ---- Charts ---- */
 .chart-wrap{width:100%;}
+.chartjs-box{position:relative;width:100%;height:260px;}
+@media (max-width:480px){ .chartjs-box{height:220px;} }
 .chart-wrap svg{width:100%;height:auto;display:block;overflow:visible;}
 .chart-wrap svg.donut-svg{width:180px !important;height:180px !important;flex:none;}
 @media (max-width:480px){ .chart-wrap svg.donut-svg{width:150px !important;height:150px !important;} }
@@ -4298,7 +4301,7 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
       points: buildWeeklySeries(p, anMetric),
     })).filter((s) => s.points.length);
 
-    chartEl.innerHTML = CH.multiLineChart(series, {
+    CH.renderMultiLineChart('analyticsTrendChart', series, {
       emptyText: 'Belum ada konten "sudah posting" dengan tanggal untuk kombinasi filter ini.',
     });
 
@@ -5917,9 +5920,10 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
 
 <script>
 /* ==========================================================================
-   CHARTS — SVG chart generators, no external library.
-   Semua fungsi return string SVG siap di-innerHTML-kan.
-   Palet warna mengikuti CSS custom properties yang sama dengan app.
+   CHARTS — dibangun di atas Chart.js (interaktif: hover tooltip, klik utk
+   cross-filter). Semua fungsi render langsung ke elemen container by-id
+   (bukan lagi return string SVG). Palet warna tetap mengikuti CSS custom
+   properties yang sama dengan app.
    ========================================================================== */
 (function () {
   'use strict';
@@ -5946,244 +5950,221 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
     return String(Math.round(n));
   }
 
+  /* ---- manajemen instance Chart.js: pastikan re-render nggak numpuk/bocor ---- */
+  const chartInstances = {};
+  function mountCanvas(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return null;
+    if (chartInstances[containerId]) {
+      chartInstances[containerId].destroy();
+      delete chartInstances[containerId];
+    }
+    container.classList.add('chartjs-box');
+    container.innerHTML = '<canvas></canvas>';
+    return container.querySelector('canvas');
+  }
+  function registerChart(containerId, chart) {
+    chartInstances[containerId] = chart;
+  }
+  function emptyState(containerId, text) {
+    const container = document.getElementById(containerId);
+    if (container) container.innerHTML = `<div class="chart-empty">${esc(text)}</div>`;
+  }
+  const baseTooltip = {
+    backgroundColor: COLORS.ink, titleColor: '#fff', bodyColor: '#fff',
+    padding: 10, cornerRadius: 8, titleFont: { family: 'Inter,sans-serif', size: 12 },
+    bodyFont: { family: 'Inter,sans-serif', size: 12 }, displayColors: false,
+  };
+  // plugin kecil buat nulis teks di tengah donut chart (persentase besar)
+  let centerTextPluginRegistered = false;
+  function ensureCenterTextPlugin() {
+    if (centerTextPluginRegistered || typeof Chart === 'undefined') return;
+    Chart.register({
+      id: 'centerText',
+      beforeDraw(chart) {
+        const opts = chart.options.plugins && chart.options.plugins.centerText;
+        if (!opts) return;
+        const { ctx, chartArea: { left, right, top, bottom } } = chart;
+        const cx = (left + right) / 2, cy = (top + bottom) / 2;
+        ctx.save();
+        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+        ctx.font = "700 26px Fraunces, serif"; ctx.fillStyle = COLORS.ink;
+        ctx.fillText(opts.big, cx, cy - 6);
+        ctx.font = "400 10.5px Inter, sans-serif"; ctx.fillStyle = COLORS.inkFaint;
+        ctx.fillText(opts.small, cx, cy + 14);
+        ctx.restore();
+      },
+    });
+    centerTextPluginRegistered = true;
+  }
+
   /* ==========================================================
      1. LINE / AREA CHART — untuk tren penjualan dari waktu ke waktu
-     data: [{label, value, fullDate?}]
+     data: [{label, value}]
+     opts: {color, emptyText, onClick(label, index)}
      ========================================================== */
-  function lineChart(data, opts) {
+  function renderLineChart(containerId, data, opts) {
     opts = opts || {};
-    const w = 560, h = 220;
-    const pad = { top: 20, right: 18, bottom: 30, left: 46 };
-    const chartW = w - pad.left - pad.right;
-    const chartH = h - pad.top - pad.bottom;
-    const color = opts.color || COLORS.sakuraDeep;
-
-    if (!data || !data.length || data.every(d => d.value === 0)) {
-      return `<div class="chart-empty">Belum ada data penjualan untuk digambarkan di periode ini.</div>`;
+    if (typeof Chart === 'undefined') { emptyState(containerId, 'Chart.js belum siap dimuat, cek koneksi internet.'); return; }
+    if (!data || !data.length || data.every((d) => d.value === 0)) {
+      emptyState(containerId, opts.emptyText || 'Belum ada data penjualan untuk digambarkan di periode ini.');
+      return;
     }
-
-    const maxValRaw = Math.max(...data.map(d => d.value));
-    const maxVal = maxValRaw <= 0 ? 1 : maxValRaw * 1.15;
-    const n = data.length;
-    const stepX = n > 1 ? chartW / (n - 1) : 0;
-
-    const points = data.map((d, i) => ({
-      x: pad.left + (n > 1 ? i * stepX : chartW / 2),
-      y: pad.top + chartH - (d.value / maxVal) * chartH,
-      ...d,
-    }));
-
-    const linePath = points.map((p, i) => (i === 0 ? 'M' : 'L') + p.x.toFixed(1) + ',' + p.y.toFixed(1)).join(' ');
-    const areaPath = n > 1
-      ? linePath + ` L${points[n - 1].x.toFixed(1)},${(pad.top + chartH).toFixed(1)} L${points[0].x.toFixed(1)},${(pad.top + chartH).toFixed(1)} Z`
-      : '';
-
-    // grid horizontal (3 garis) + label sumbu Y
-    const gridLines = [0, 0.5, 1].map((frac) => {
-      const y = pad.top + chartH * (1 - frac);
-      const val = maxVal * frac;
-      return `
-        <line x1="${pad.left}" y1="${y.toFixed(1)}" x2="${w - pad.right}" y2="${y.toFixed(1)}" stroke="${COLORS.lineSoft}" stroke-width="1"/>
-        <text x="${pad.left - 8}" y="${(y + 3.5).toFixed(1)}" text-anchor="end" font-size="9.5" fill="${COLORS.inkFaint}" font-family="Inter,sans-serif">${rpShort(val)}</text>
-      `;
-    }).join('');
-
-    // label sumbu X — kalau titik terlalu banyak, tampilkan sebagian saja
-    const labelEvery = n > 10 ? Math.ceil(n / 7) : 1;
-    const xLabels = points.map((p, i) => {
-      if (i % labelEvery !== 0 && i !== n - 1) return '';
-      return `<text x="${p.x.toFixed(1)}" y="${h - 8}" text-anchor="middle" font-size="9.5" fill="${COLORS.inkFaint}" font-family="Inter,sans-serif">${esc(p.label)}</text>`;
-    }).join('');
-
-    const dots = points.map((p, i) => {
-      const isLast = i === n - 1;
-      return `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${isLast ? 4.5 : 3}" fill="${isLast ? color : COLORS.paper}" stroke="${color}" stroke-width="2">
-        <title>${esc(p.label)}: ${rp(p.value)}</title>
-      </circle>`;
-    }).join('');
-
-    const gradId = 'lineGrad' + Math.random().toString(36).slice(2, 8);
-
-    return `
-      <div class="chart-wrap">
-        <svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">
-          <defs>
-            <linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stop-color="${color}" stop-opacity="0.28"/>
-              <stop offset="100%" stop-color="${color}" stop-opacity="0.02"/>
-            </linearGradient>
-          </defs>
-          ${gridLines}
-          ${areaPath ? `<path d="${areaPath}" fill="url(#${gradId})"/>` : ''}
-          <path d="${linePath}" fill="none" stroke="${color}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
-          ${dots}
-          ${xLabels}
-        </svg>
-      </div>
-    `;
+    const canvas = mountCanvas(containerId);
+    if (!canvas) return;
+    const color = opts.color || COLORS.sakuraDeep;
+    const chart = new Chart(canvas.getContext('2d'), {
+      type: 'line',
+      data: {
+        labels: data.map((d) => d.label),
+        datasets: [{
+          data: data.map((d) => d.value),
+          borderColor: color, backgroundColor: color + '30',
+          fill: true, tension: 0.3, pointRadius: 3, pointHoverRadius: 6,
+          pointBackgroundColor: COLORS.paper, pointBorderColor: color, pointBorderWidth: 2,
+        }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: Object.assign({}, baseTooltip, { callbacks: { label: (ctx) => rp(ctx.parsed.y) } }),
+        },
+        scales: {
+          y: { beginAtZero: true, grid: { color: COLORS.lineSoft }, ticks: { color: COLORS.inkFaint, font: { size: 10.5 }, callback: (v) => rpShort(v) } },
+          x: { grid: { display: false }, ticks: { color: COLORS.inkFaint, font: { size: 10.5 } } },
+        },
+        onClick: opts.onClick ? (evt, elements) => { if (elements.length) opts.onClick(data[elements[0].index].label, elements[0].index); } : undefined,
+        onHover: opts.onClick ? (evt, elements) => { evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; } : undefined,
+      },
+    });
+    registerChart(containerId, chart);
   }
 
   /* ==========================================================
      2. HORIZONTAL BAR CHART — untuk produk terlaris
      data: [{label, value}] sudah harus terurut descending
+     opts: {emptyText, valueLabel, onClick(label, index)}
      ========================================================== */
-  function horizontalBarChart(data, opts) {
+  function renderHorizontalBarChart(containerId, data, opts) {
     opts = opts || {};
+    if (typeof Chart === 'undefined') { emptyState(containerId, 'Chart.js belum siap dimuat, cek koneksi internet.'); return; }
     if (!data || !data.length) {
-      return `<div class="chart-empty">Belum ada penjualan produk di periode ini.</div>`;
+      emptyState(containerId, opts.emptyText || 'Belum ada data untuk digambarkan.');
+      return;
     }
+    const canvas = mountCanvas(containerId);
+    if (!canvas) return;
     const top = data.slice(0, 8);
-    const rest = data.length - top.length;
-    const maxVal = Math.max(...top.map(d => d.value), 1);
-    const rowH = 34;
-    const w = 560;
-    const h = top.length * rowH + 12;
-    const labelW = 130;
-    const barMaxW = w - labelW - 70;
-
-    const rows = top.map((d, i) => {
-      const barW = Math.max(4, (d.value / maxVal) * barMaxW);
-      const y = i * rowH + 6;
-      const isTop = i === 0;
-      const shortLabel = d.label.length > 20 ? d.label.slice(0, 19) + '…' : d.label;
-      return `
-        <g>
-          <text x="0" y="${y + 15}" font-size="12" font-weight="700" fill="${COLORS.ink}" font-family="Inter,sans-serif">${esc(shortLabel)}<title>${esc(d.label)}</title></text>
-          <rect x="${labelW}" y="${y + 3}" width="${barMaxW}" height="16" rx="8" fill="${COLORS.bgAlt}"/>
-          <rect x="${labelW}" y="${y + 3}" width="${barW.toFixed(1)}" height="16" rx="8" fill="${isTop ? COLORS.sakuraDeep : COLORS.sakura}">
-            <title>${esc(d.label)}: ${d.value} terjual</title>
-          </rect>
-          <text x="${labelW + barMaxW + 10}" y="${y + 15}" font-size="11.5" font-weight="800" fill="${COLORS.inkSoft}" font-family="Inter,sans-serif">${d.value}x</text>
-        </g>
-      `;
-    }).join('');
-
-    return `
-      <div class="chart-wrap">
-        <svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">${rows}</svg>
-        ${rest > 0 ? `<div style="font-size:11.5px;color:var(--ink-faint);margin-top:6px;">+ ${rest} produk lainnya</div>` : ''}
-      </div>
-    `;
+    const chart = new Chart(canvas.getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels: top.map((d) => (d.label.length > 24 ? d.label.slice(0, 23) + '…' : d.label)),
+        datasets: [{
+          data: top.map((d) => d.value),
+          backgroundColor: top.map((d, i) => (i === 0 ? COLORS.sakuraDeep : COLORS.sakura)),
+          borderRadius: 6, maxBarThickness: 22,
+        }],
+      },
+      options: {
+        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { display: false },
+          tooltip: Object.assign({}, baseTooltip, { callbacks: { label: (ctx) => opts.valueLabel ? `${ctx.parsed.x} ${opts.valueLabel}` : rp(ctx.parsed.x) } }),
+        },
+        scales: {
+          x: { beginAtZero: true, grid: { color: COLORS.lineSoft }, ticks: { color: COLORS.inkFaint, font: { size: 10.5 } } },
+          y: { grid: { display: false }, ticks: { color: COLORS.ink, font: { size: 11.5, weight: '700' } } },
+        },
+        onClick: opts.onClick ? (evt, elements) => { if (elements.length) opts.onClick(data[elements[0].index].label, elements[0].index); } : undefined,
+        onHover: opts.onClick ? (evt, elements) => { evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; } : undefined,
+      },
+    });
+    registerChart(containerId, chart);
+    if (data.length > 8) {
+      document.getElementById(containerId).insertAdjacentHTML('beforeend', `<div style="font-size:11.5px;color:var(--ink-faint);margin-top:6px;">+ ${data.length - 8} produk lainnya</div>`);
+    }
   }
 
   /* ==========================================================
      3. DONUT CHART — untuk distribusi untung/rugi
-     segments: [{label, value, color}]
+     segments: [{label, value, color, key?}]
+     opts: {emptyText, centerText:{big,small}, onClick(label, index)}
      ========================================================== */
-  function donutChart(segments, opts) {
+  function renderDonutChart(containerId, segments, opts) {
     opts = opts || {};
-    const filtered = segments.filter(s => s.value > 0);
+    if (typeof Chart === 'undefined') { emptyState(containerId, 'Chart.js belum siap dimuat, cek koneksi internet.'); return; }
+    const filtered = segments.filter((s) => s.value > 0);
     const total = filtered.reduce((sum, s) => sum + s.value, 0);
     if (!filtered.length || total <= 0) {
-      return `<div class="chart-empty">Belum ada transaksi penjualan di periode ini.</div>`;
+      emptyState(containerId, opts.emptyText || 'Belum ada transaksi penjualan di periode ini.');
+      return;
     }
-    const size = 200, cx = size / 2, cy = size / 2, r = 72, stroke = 30;
-    const circumference = 2 * Math.PI * r;
-    let offsetAcc = 0;
-
-    const arcs = filtered.map((s) => {
-      const frac = s.value / total;
-      const dash = frac * circumference;
-      const gap = circumference - dash;
-      const rotation = (offsetAcc / total) * 360 - 90;
-      offsetAcc += s.value;
-      return `
-        <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${s.color}" stroke-width="${stroke}"
-          stroke-dasharray="${dash.toFixed(1)} ${gap.toFixed(1)}"
-          transform="rotate(${rotation.toFixed(2)} ${cx} ${cy})" stroke-linecap="butt">
-          <title>${esc(s.label)}: ${rp(s.value)} (${Math.round(frac * 100)}%)</title>
-        </circle>
-      `;
-    }).join('');
-
-    const untungSeg = filtered.find(s => s.key === 'untung');
-    const untungPct = untungSeg ? Math.round((untungSeg.value / total) * 100) : 0;
-
-    const legend = segments.map((s) => `
-      <div class="chart-legend-item">
-        <span class="chart-legend-dot" style="background:${s.color};"></span>
-        ${esc(s.label)}: <b>${rp(s.value)}</b>
-      </div>
-    `).join('');
-
-    return `
-      <div class="chart-wrap" style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;">
-        <svg class="donut-svg" viewBox="0 0 ${size} ${size}">
-          ${arcs}
-          <text x="${cx}" y="${cy - 4}" text-anchor="middle" font-size="26" font-weight="700" fill="${COLORS.ink}" font-family="Fraunces,serif">${untungPct}%</text>
-          <text x="${cx}" y="${cy + 16}" text-anchor="middle" font-size="10.5" fill="${COLORS.inkFaint}" font-family="Inter,sans-serif">omzet untung</text>
-        </svg>
-        <div style="flex:1;min-width:160px;">${legend}</div>
-      </div>
-    `;
+    ensureCenterTextPlugin();
+    const canvas = mountCanvas(containerId);
+    if (!canvas) return;
+    const chart = new Chart(canvas.getContext('2d'), {
+      type: 'doughnut',
+      data: {
+        labels: filtered.map((s) => s.label),
+        datasets: [{ data: filtered.map((s) => s.value), backgroundColor: filtered.map((s) => s.color), borderColor: COLORS.paper, borderWidth: 2 }],
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false, cutout: '68%',
+        plugins: {
+          legend: { position: 'right', labels: { color: COLORS.inkSoft, font: { family: 'Inter,sans-serif', size: 11.5 }, usePointStyle: true, boxWidth: 8 } },
+          tooltip: Object.assign({}, baseTooltip, { callbacks: { label: (ctx) => `${ctx.label}: ${rp(ctx.parsed)} (${Math.round((ctx.parsed / total) * 100)}%)` } }),
+          centerText: opts.centerText || null,
+        },
+        onClick: opts.onClick ? (evt, elements) => { if (elements.length) opts.onClick(filtered[elements[0].index].label, elements[0].index); } : undefined,
+        onHover: opts.onClick ? (evt, elements) => { evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; } : undefined,
+      },
+    });
+    registerChart(containerId, chart);
   }
 
   /* ==========================================================
      4. GROUPED BAR CHART — untuk perbandingan channel
      data: [{label, values: [{key, value, color}]}]
      seriesLegend: [{key, label, color}]
+     opts: {emptyText, onClick(label, index)}
      ========================================================== */
-  function groupedBarChart(data, seriesLegend, opts) {
+  function renderGroupedBarChart(containerId, data, seriesLegend, opts) {
     opts = opts || {};
-    const hasAny = data.some(d => d.values.some(v => v.value > 0));
+    if (typeof Chart === 'undefined') { emptyState(containerId, 'Chart.js belum siap dimuat, cek koneksi internet.'); return; }
+    const hasAny = data.some((d) => d.values.some((v) => v.value > 0));
     if (!data.length || !hasAny) {
-      return `<div class="chart-empty">Belum ada penjualan tercatat per channel di periode ini.</div>`;
+      emptyState(containerId, opts.emptyText || 'Belum ada data buat dibandingkan di periode ini.');
+      return;
     }
-    const w = 560, h = 230;
-    const pad = { top: 16, right: 16, bottom: 34, left: 46 };
-    const chartW = w - pad.left - pad.right;
-    const chartH = h - pad.top - pad.bottom;
-
-    const maxVal = Math.max(1, ...data.flatMap(d => d.values.map(v => v.value)));
-    const groupCount = data.length;
-    const groupW = chartW / groupCount;
-    const seriesCount = seriesLegend.length;
-    const barGap = 4;
-    const barW = Math.min(34, (groupW - 24) / seriesCount - barGap);
-
-    const gridLines = [0, 0.5, 1].map((frac) => {
-      const y = pad.top + chartH * (1 - frac);
-      const val = maxVal * frac;
-      return `
-        <line x1="${pad.left}" y1="${y.toFixed(1)}" x2="${w - pad.right}" y2="${y.toFixed(1)}" stroke="${COLORS.lineSoft}" stroke-width="1"/>
-        <text x="${pad.left - 8}" y="${(y + 3.5).toFixed(1)}" text-anchor="end" font-size="9.5" fill="${COLORS.inkFaint}" font-family="Inter,sans-serif">${rpShort(val)}</text>
-      `;
-    }).join('');
-
-    const groups = data.map((d, gi) => {
-      const groupX = pad.left + gi * groupW;
-      const totalBarsW = seriesCount * barW + (seriesCount - 1) * barGap;
-      const startX = groupX + (groupW - totalBarsW) / 2;
-
-      const bars = d.values.map((v, si) => {
-        const barH = Math.max(2, (v.value / maxVal) * chartH);
-        const x = startX + si * (barW + barGap);
-        const y = pad.top + chartH - barH;
-        return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${barH.toFixed(1)}" rx="5" fill="${v.color}">
-          <title>${esc(d.label)} — ${esc(v.key)}: ${rp(v.value)}</title>
-        </rect>`;
-      }).join('');
-
-      const label = `<text x="${(groupX + groupW / 2).toFixed(1)}" y="${h - 12}" text-anchor="middle" font-size="10.5" font-weight="700" fill="${COLORS.inkSoft}" font-family="Inter,sans-serif">${esc(d.label)}</text>`;
-
-      return bars + label;
-    }).join('');
-
-    const legend = seriesLegend.map((s) => `
-      <div class="chart-legend-item">
-        <span class="chart-legend-dot" style="background:${s.color};"></span>${esc(s.label)}
-      </div>
-    `).join('');
-
-    return `
-      <div class="chart-wrap">
-        <svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">
-          ${gridLines}
-          ${groups}
-        </svg>
-        <div class="chart-legend">${legend}</div>
-      </div>
-    `;
+    const canvas = mountCanvas(containerId);
+    if (!canvas) return;
+    const chart = new Chart(canvas.getContext('2d'), {
+      type: 'bar',
+      data: {
+        labels: data.map((d) => d.label),
+        datasets: seriesLegend.map((s) => ({
+          label: s.label,
+          data: data.map((d) => { const v = d.values.find((x) => x.key === s.key); return v ? v.value : 0; }),
+          backgroundColor: s.color, borderRadius: 5, maxBarThickness: 34,
+        })),
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        plugins: {
+          legend: { position: 'bottom', labels: { color: COLORS.inkSoft, font: { family: 'Inter,sans-serif', size: 11 }, usePointStyle: true, boxWidth: 8 } },
+          tooltip: Object.assign({}, baseTooltip, { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${rp(ctx.parsed.y)}` } }),
+        },
+        scales: {
+          y: { beginAtZero: true, grid: { color: COLORS.lineSoft }, ticks: { color: COLORS.inkFaint, font: { size: 10.5 }, callback: (v) => rpShort(v) } },
+          x: { grid: { display: false }, ticks: { color: COLORS.inkSoft, font: { size: 10.5, weight: '700' } } },
+        },
+        onClick: opts.onClick ? (evt, elements) => { if (elements.length) opts.onClick(data[elements[0].index].label, elements[0].index); } : undefined,
+        onHover: opts.onClick ? (evt, elements) => { evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; } : undefined,
+      },
+    });
+    registerChart(containerId, chart);
   }
 
   function trendBadge(firstVal, lastVal) {
@@ -6211,78 +6192,60 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
      seriesArr: [{ key, label, color, points:[{label, value}] }]
      angka ditampilkan generik (bukan Rupiah).
      ========================================================== */
-  function multiLineChart(seriesArr, opts) {
+  /* ==========================================================
+     5. MULTI-LINE CHART — untuk tren metrik konten (views/like/komentar)
+     bisa satu garis atau beberapa garis (per platform) sekaligus.
+     seriesArr: [{ key, label, color, points:[{label, value}] }]
+     angka ditampilkan generik (bukan Rupiah).
+     opts: {emptyText, onClick(seriesKey, label)}
+     ========================================================== */
+  function renderMultiLineChart(containerId, seriesArr, opts) {
     opts = opts || {};
-    const w = 640, h = 250;
-    const pad = { top: 20, right: 18, bottom: 32, left: 42 };
-    const chartW = w - pad.left - pad.right;
-    const chartH = h - pad.top - pad.bottom;
-
+    if (typeof Chart === 'undefined') { emptyState(containerId, 'Chart.js belum siap dimuat, cek koneksi internet.'); return; }
     const usable = (seriesArr || []).filter((s) => s.points && s.points.length);
     const allVals = usable.flatMap((s) => s.points.map((p) => p.value));
     if (!usable.length || !allVals.length || allVals.every((v) => v === 0)) {
-      return `<div class="chart-empty">${esc(opts.emptyText || 'Belum ada data untuk digambarkan di kombinasi filter ini.')}</div>`;
+      emptyState(containerId, opts.emptyText || 'Belum ada data untuk digambarkan di kombinasi filter ini.');
+      return;
     }
-
-    const n = Math.max(...usable.map((s) => s.points.length));
-    const maxValRaw = Math.max(...allVals);
-    const maxVal = maxValRaw <= 0 ? 1 : maxValRaw * 1.15;
-    const stepX = n > 1 ? chartW / (n - 1) : 0;
-
-    const gridLines = [0, 0.5, 1].map((frac) => {
-      const y = pad.top + chartH * (1 - frac);
-      const val = maxVal * frac;
-      return `
-        <line x1="${pad.left}" y1="${y.toFixed(1)}" x2="${w - pad.right}" y2="${y.toFixed(1)}" stroke="${COLORS.lineSoft}" stroke-width="1"/>
-        <text x="${pad.left - 8}" y="${(y + 3.5).toFixed(1)}" text-anchor="end" font-size="9.5" fill="${COLORS.inkFaint}" font-family="Inter,sans-serif">${numShort(val)}</text>
-      `;
-    }).join('');
-
+    const canvas = mountCanvas(containerId);
+    if (!canvas) return;
     const labelSeries = usable.reduce((a, b) => (a.points.length >= b.points.length ? a : b));
-    const labelEvery = n > 9 ? Math.ceil(n / 7) : 1;
-    const xLabels = labelSeries.points.map((p, i) => {
-      if (i % labelEvery !== 0 && i !== n - 1) return '';
-      const x = pad.left + (n > 1 ? i * stepX : chartW / 2);
-      return `<text x="${x.toFixed(1)}" y="${h - 8}" text-anchor="middle" font-size="9.5" fill="${COLORS.inkFaint}" font-family="Inter,sans-serif">${esc(p.label)}</text>`;
-    }).join('');
-
-    const seriesSvg = usable.map((s) => {
-      const pts = s.points.map((p, i) => ({
-        x: pad.left + (n > 1 ? i * stepX : chartW / 2),
-        y: pad.top + chartH - (p.value / maxVal) * chartH,
-        ...p,
-      }));
-      const linePath = pts.map((p, i) => (i === 0 ? 'M' : 'L') + p.x.toFixed(1) + ',' + p.y.toFixed(1)).join(' ');
-      const dots = pts.map((p, i) => {
-        const isLast = i === pts.length - 1;
-        return `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${isLast ? 4.2 : 2.6}" fill="${isLast ? s.color : COLORS.paper}" stroke="${s.color}" stroke-width="2">
-          <title>${esc(s.label)} — ${esc(p.label)}: ${numShort(p.value)}</title>
-        </circle>`;
-      }).join('');
-      return `<path d="${linePath}" fill="none" stroke="${s.color}" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>${dots}`;
-    }).join('');
-
-    const legend = usable.length > 1 ? `
-      <div class="chart-legend">
-        ${usable.map((s) => `
-          <div class="chart-legend-item"><span class="chart-legend-dot" style="background:${s.color};"></span>${esc(s.label)}</div>
-        `).join('')}
-      </div>
-    ` : '';
-
-    return `
-      <div class="chart-wrap">
-        <svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">
-          ${gridLines}
-          ${seriesSvg}
-          ${xLabels}
-        </svg>
-        ${legend}
-      </div>
-    `;
+    const labels = labelSeries.points.map((p) => p.label);
+    const chart = new Chart(canvas.getContext('2d'), {
+      type: 'line',
+      data: {
+        labels,
+        datasets: usable.map((s) => ({
+          label: s.label,
+          data: s.points.map((p) => p.value),
+          borderColor: s.color, backgroundColor: s.color + '20',
+          tension: 0.3, pointRadius: 3, pointHoverRadius: 6,
+          pointBackgroundColor: COLORS.paper, pointBorderColor: s.color, pointBorderWidth: 2,
+        })),
+      },
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode: 'index', intersect: false },
+        plugins: {
+          legend: { display: usable.length > 1, position: 'bottom', labels: { color: COLORS.inkSoft, font: { family: 'Inter,sans-serif', size: 11 }, usePointStyle: true, boxWidth: 8 } },
+          tooltip: Object.assign({}, baseTooltip, { displayColors: true, callbacks: { label: (ctx) => `${ctx.dataset.label}: ${numShort(ctx.parsed.y)}` } }),
+        },
+        scales: {
+          y: { beginAtZero: true, grid: { color: COLORS.lineSoft }, ticks: { color: COLORS.inkFaint, font: { size: 10.5 }, callback: (v) => numShort(v) } },
+          x: { grid: { display: false }, ticks: { color: COLORS.inkFaint, font: { size: 10.5 } } },
+        },
+        onClick: opts.onClick ? (evt, elements) => { if (elements.length) opts.onClick(usable[elements[0].datasetIndex].key, labels[elements[0].index]); } : undefined,
+        onHover: opts.onClick ? (evt, elements) => { evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; } : undefined,
+      },
+    });
+    registerChart(containerId, chart);
   }
 
-  window.__charmoryCharts = { lineChart, horizontalBarChart, donutChart, groupedBarChart, multiLineChart, trendBadge, numShort, COLORS };
+  window.__charmoryCharts = {
+    renderLineChart, renderHorizontalBarChart, renderDonutChart, renderGroupedBarChart, renderMultiLineChart,
+    trendBadge, numShort, COLORS,
+  };
 })();
 
 </script>
@@ -6301,6 +6264,7 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
 
   let salesTab = 'catat'; // catat | pengeluaran | laporan
   let reportPeriod = 'harian'; // harian | mingguan | bulanan | total
+  let reportChannelFilter = null; // diisi saat user klik salah satu bar di chart Perbandingan Channel
   let editingExpenseId = null;
   let pendingDelete = null;
 
@@ -7277,13 +7241,13 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
     } else {
       trendHintEl.textContent = '';
     }
-    document.getElementById('chartTrend').innerHTML = CH.lineChart(report.trend, { color: CH.COLORS.sakuraDeep });
+    CH.renderLineChart('chartTrend', report.trend, { color: CH.COLORS.sakuraDeep });
 
     // ---- CHART: Produk Terlaris ----
     const bestSellerData = Object.entries(report.byProduct)
       .map(([name, d]) => ({ label: name, value: d.qty }))
       .sort((a, b) => b.value - a.value);
-    document.getElementById('chartBestSellers').innerHTML = CH.horizontalBarChart(bestSellerData);
+    CH.renderHorizontalBarChart('chartBestSellers', bestSellerData, { valueLabel: 'terjual' });
 
     // ---- CHART: Distribusi Untung & Rugi ----
     const plSegments = [
@@ -7291,9 +7255,11 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
       { key: 'rugi', label: 'Omzet dari transaksi rugi', value: report.profitLoss.rugi, color: CH.COLORS.danger },
       { key: 'impas', label: 'Omzet dari transaksi impas', value: report.profitLoss.impas, color: CH.COLORS.inkFaint },
     ];
-    document.getElementById('chartProfitLoss').innerHTML = CH.donutChart(plSegments);
+    const plTotal = plSegments.reduce((s, x) => s + x.value, 0);
+    const untungPct = plTotal > 0 ? Math.round((report.profitLoss.untung / plTotal) * 100) : 0;
+    CH.renderDonutChart('chartProfitLoss', plSegments, { centerText: { big: `${untungPct}%`, small: 'omzet untung' } });
 
-    // ---- CHART: Perbandingan Channel ----
+    // ---- CHART: Perbandingan Channel (klik bar buat filter breakdown produk di bawahnya) ----
     const channelOrder = ['Shopee', 'TikTok Shop', 'Offline Store'];
     const presentChannels = Array.from(new Set([...channelOrder, ...Object.keys(report.byChannel)]));
     const channelData = presentChannels
@@ -7309,18 +7275,14 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
       { key: 'Omzet', label: 'Omzet', color: CH.COLORS.sakuraDeep },
       { key: 'Laba', label: 'Laba Kotor', color: '#C9DECF' },
     ];
-    document.getElementById('chartChannel').innerHTML = channelData.length
-      ? CH.groupedBarChart(channelData, channelLegend)
-      : `<div class="chart-empty">Belum ada penjualan tercatat per channel di periode ini.</div>`;
+    CH.renderGroupedBarChart('chartChannel', channelData, channelLegend, {
+      onClick: (channelLabel) => {
+        reportChannelFilter = reportChannelFilter === channelLabel ? null : channelLabel;
+        renderProductBreakdown(report);
+      },
+    });
 
-    // breakdown per produk
-    const prodEl = document.getElementById('reportByProduct');
-    const prodEntries = Object.entries(report.byProduct).sort((a,b) => b[1].revenue - a[1].revenue);
-    prodEl.innerHTML = prodEntries.length ? prodEntries.map(([name, d]) => `
-      <div class="plat-row">
-        <span class="plat-name" style="width:auto;flex:1;">${esc(name)}</span>
-        <span class="plat-count" style="width:auto;">${d.qty}x · ${rp(d.revenue)} · <span style="color:${d.profit>=0?'var(--sage-deep)':'#B84A3E'}">untung ${rp(d.profit)}</span></span>
-      </div>`).join('') : `<div class="empty-note">Belum ada penjualan di periode ini.</div>`;
+    renderProductBreakdown(report);
 
     // breakdown per kategori pengeluaran
     const expEl = document.getElementById('reportByExpense');
@@ -7330,6 +7292,39 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
         <span class="plat-name" style="width:auto;flex:1;">${esc(cat)}</span>
         <span class="plat-count" style="width:auto;color:#B84A3E;">${rp(amt)}</span>
       </div>`).join('') : `<div class="empty-note">Belum ada pengeluaran di periode ini.</div>`;
+  }
+
+  // breakdown per produk — dipisah dari renderLaporan supaya bisa di-render ulang sendiri
+  // begitu user klik salah satu bar channel (cross-filter), tanpa perlu gambar ulang semua chart.
+  function renderProductBreakdown(report) {
+    const prodEl = document.getElementById('reportByProduct');
+    let sourceRows = report.salesInRange;
+    if (reportChannelFilter) {
+      sourceRows = sourceRows.filter((s) => (s.channel || 'Offline Store') === reportChannelFilter);
+    }
+    const byProductFiltered = {};
+    sourceRows.forEach((s) => {
+      if (!byProductFiltered[s.productName]) byProductFiltered[s.productName] = { qty: 0, revenue: 0, profit: 0 };
+      byProductFiltered[s.productName].qty += s.qty;
+      byProductFiltered[s.productName].revenue += s.qty * s.sellPriceAtSale;
+      byProductFiltered[s.productName].profit += s.qty * (s.sellPriceAtSale - s.costPriceAtSale);
+    });
+    const prodEntries = Object.entries(byProductFiltered).sort((a,b) => b[1].revenue - a[1].revenue);
+
+    const filterBadge = reportChannelFilter ? `
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:12px;">
+        <span class="channel-badge" style="background:var(--sakura-pale);color:var(--sakura-deep);">Difilter: ${esc(reportChannelFilter)}</span>
+        <button type="button" id="btnClearChannelFilter" style="background:none;border:none;color:var(--ink-faint);text-decoration:underline;cursor:pointer;font-size:12px;">Hapus filter</button>
+      </div>` : '';
+
+    prodEl.innerHTML = filterBadge + (prodEntries.length ? prodEntries.map(([name, d]) => `
+      <div class="plat-row">
+        <span class="plat-name" style="width:auto;flex:1;">${esc(name)}</span>
+        <span class="plat-count" style="width:auto;">${d.qty}x · ${rp(d.revenue)} · <span style="color:${d.profit>=0?'var(--sage-deep)':'#B84A3E'}">untung ${rp(d.profit)}</span></span>
+      </div>`).join('') : `<div class="empty-note">Belum ada penjualan${reportChannelFilter ? ' dari channel ini' : ''} di periode ini.</div>`);
+
+    const clearBtn = document.getElementById('btnClearChannelFilter');
+    if (clearBtn) clearBtn.addEventListener('click', () => { reportChannelFilter = null; renderProductBreakdown(report); });
   }
 
   /* ---------- SHARED DELETE ---------- */
@@ -7411,7 +7406,7 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
 
     document.getElementById('btnExportReportExcel').addEventListener('click', exportReportToExcel);
     document.querySelectorAll('.period-chip').forEach((c) => {
-      c.addEventListener('click', () => { reportPeriod = c.dataset.period; renderLaporan(); });
+      c.addEventListener('click', () => { reportPeriod = c.dataset.period; reportChannelFilter = null; renderLaporan(); });
     });
 
     document.getElementById('btnCancelSalesConfirm').addEventListener('click', closeSalesConfirm);
