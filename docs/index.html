@@ -10,7 +10,6 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;0,9..144,700;1,9..144,500&family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 <style>
 /* ============ DESIGN TOKENS ============
    Color: --bg #FFF8F3 (krem resin muda) · --ink #2B2320 (coklat gelap)
@@ -1000,8 +999,6 @@ td.actions-cell .btn-icon svg{width:13px;height:13px;}
 
 /* ---- Charts ---- */
 .chart-wrap{width:100%;}
-.chartjs-box{position:relative;width:100%;height:260px;}
-@media (max-width:480px){ .chartjs-box{height:220px;} }
 .chart-wrap svg{width:100%;height:auto;display:block;overflow:visible;}
 .chart-wrap svg.donut-svg{width:180px !important;height:180px !important;flex:none;}
 @media (max-width:480px){ .chart-wrap svg.donut-svg{width:150px !important;height:150px !important;} }
@@ -1029,15 +1026,11 @@ td.actions-cell .btn-icon svg{width:13px;height:13px;}
 .txn-totals .row{display:flex;justify-content:space-between;color:var(--ink-soft);}
 .txn-totals .row.grand{font-size:16px;font-weight:800;color:var(--ink);padding-top:8px;border-top:1px solid var(--line-soft);margin-top:4px;}
 .txn-item-row{
-  padding:12px 0;border-bottom:1px solid var(--line-soft);
+  display:grid;grid-template-columns:1.6fr 1fr .7fr .9fr .8fr auto;gap:8px;align-items:flex-end;
+  padding:10px 0;border-bottom:1px solid var(--line-soft);
 }
 .txn-item-row:first-child{padding-top:0;}
-.txn-item-line-top{display:grid;grid-template-columns:1.3fr 1fr 1.3fr;gap:8px;margin-bottom:8px;align-items:flex-end;}
-.txn-item-line-bottom{display:grid;grid-template-columns:.7fr 1fr 1fr auto;gap:8px;align-items:flex-end;}
-@media (max-width:640px){
-  .txn-item-line-top{grid-template-columns:1fr 1fr;}
-  .txn-item-line-bottom{grid-template-columns:1fr 1fr;}
-}
+@media (max-width:720px){ .txn-item-row{grid-template-columns:1fr 1fr;} }
 .txn-item-subtotal{font-size:11.5px;color:var(--ink-faint);grid-column:1/-1;text-align:right;}
 .txn-status-pill{font-size:10.5px;font-weight:800;padding:3px 9px;border-radius:99px;white-space:nowrap;}
 .txn-status-pill.completed{background:var(--sage-pale);color:var(--sage-deep);}
@@ -1815,6 +1808,7 @@ window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
         <div class="field"><label>Nama Produk <span class="req">*</span></label><input type="text" id="prd-name" placeholder="mis. Bag Charm Sakura"></div>
         <div class="field"><label>SKU (opsional)</label><input type="text" id="prd-sku" placeholder="mis. CH-SAK-01"></div>
       </div>
+      <div class="hint" style="margin-top:-6px;margin-bottom:12px;">Isi SKU biar Import Penjualan Excel/CSV bisa mencocokkan produk secara presisi (bukan cuma berdasarkan nama).</div>
       <div class="field-row">
         <div class="field"><label>Stok Minimum Total (alert)</label><input type="text" inputmode="numeric" id="prd-minstock" placeholder="0"></div>
       </div>
@@ -1826,16 +1820,7 @@ window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
       <div id="prd-stock-readonly-note" style="display:none;" class="datalist-hint">Stok produk ini sekarang dikelola lewat <strong>Adjustment</strong> dan <strong>Stock Opname</strong> di tab sebelah, bukan dari form ini — biar semua perubahan stok tercatat rapi di Mutasi Stok.</div>
       <div class="field-row">
         <div class="field"><label>Harga Modal / Unit (Rp)</label><input type="text" inputmode="numeric" id="prd-costprice" placeholder="0"></div>
-        <div class="field"><label>Harga Jual / Unit (Rp) <span class="hint">(harga default)</span></label><input type="text" inputmode="numeric" id="prd-sellprice" placeholder="0"></div>
-      </div>
-      <label style="display:flex;align-items:center;gap:8px;font-weight:600;font-size:12.5px;cursor:pointer;margin:4px 0 10px;">
-        <input type="checkbox" id="prd-use-channel-prices" style="width:16px;height:16px;">
-        Gunakan harga jual berbeda tiap channel
-      </label>
-      <div id="prd-channel-prices-section" style="display:none;">
-        <div class="field-section-label">Harga Jual per Channel</div>
-        <div id="prd-channel-prices-rows"></div>
-        <div class="datalist-hint" style="margin-top:2px;">Kosongkan channel tertentu buat pakai harga default di atas.</div>
+        <div class="field"><label>Harga Jual / Unit (Rp)</label><input type="text" inputmode="numeric" id="prd-sellprice" placeholder="0"></div>
       </div>
       <div class="field-section-label">Resep Bahan (dipakai otomatis saat Catat Produksi)</div>
       <div id="prd-recipe-rows"></div>
@@ -2166,12 +2151,40 @@ window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
 
       <div class="dash-grid">
         <div class="panel">
+          <div class="panel-head">
+            <h3>Omzet vs Laba</h3>
+            <span class="hint">tren omzet dibanding laba kotor dari waktu ke waktu</span>
+          </div>
+          <div id="chartOmzetLaba"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3>Produk Paling Menguntungkan</h3><span class="hint">berdasarkan laba kotor Rp</span></div>
+          <div id="chartMostProfitable"></div>
+        </div>
+      </div>
+
+      <div class="dash-grid">
+        <div class="panel">
           <div class="panel-head"><h3>Distribusi Untung &amp; Rugi</h3><span class="hint">porsi omzet dari transaksi untung vs rugi</span></div>
           <div id="chartProfitLoss"></div>
         </div>
         <div class="panel">
-          <div class="panel-head"><h3>Perbandingan Channel Penjualan</h3><span class="hint">Shopee · TikTok Shop · Offline Store</span></div>
+          <div class="panel-head"><h3>Perbandingan Channel Penjualan</h3><span class="hint" id="channelChartHint"></span></div>
           <div id="chartChannel"></div>
+        </div>
+      </div>
+
+      <div class="dash-grid">
+        <div class="panel">
+          <div class="panel-head">
+            <h3>Cash Flow</h3>
+            <span class="hint">uang masuk (transaksi Lunas) vs uang keluar (pengeluaran)</span>
+          </div>
+          <div id="chartCashFlow"></div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><h3>Ringkasan Kas</h3></div>
+          <div id="reportCashSummary"></div>
         </div>
       </div>
 
@@ -2283,18 +2296,24 @@ window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
       <div class="field-row-3">
         <div class="field"><label>Tanggal <span class="req">*</span></label><select id="map-date"></select></div>
         <div class="field"><label>Nama Produk <span class="req">*</span></label><select id="map-product"></select></div>
-        <div class="field"><label>Qty <span class="req">*</span></label><select id="map-qty"></select></div>
+        <div class="field"><label>SKU (opsional, disarankan)</label><select id="map-sku"><option value="">- tidak ada -</option></select></div>
       </div>
       <div class="field-row-3">
+        <div class="field"><label>Qty <span class="req">*</span></label><select id="map-qty"></select></div>
         <div class="field"><label>Harga Jual <span class="req">*</span></label><select id="map-price"></select></div>
         <div class="field"><label>Diskon (opsional)</label><select id="map-discount"><option value="">- tidak ada -</option></select></div>
+      </div>
+      <div class="field-row-3">
+        <div class="field"><label>Biaya Admin (opsional)</label><select id="map-adminfee"><option value="">- tidak ada -</option></select></div>
+        <div class="field"><label>Biaya Platform (opsional)</label><select id="map-platformfee"><option value="">- tidak ada -</option></select></div>
         <div class="field"><label>External Order ID (opsional)</label><select id="map-orderid"><option value="">- tidak ada -</option></select></div>
       </div>
       <div class="field-row-3">
         <div class="field"><label>Metode Bayar (opsional)</label><select id="map-paymethod"><option value="">- tidak ada -</option></select></div>
         <div class="field"><label>Status Bayar (opsional)</label><select id="map-paystatus"><option value="">- tidak ada -</option></select></div>
-        <div class="field"><label>Biaya Admin (opsional)</label><select id="map-adminfee"><option value="">- tidak ada -</option></select></div>
+        <div class="field"><label>Status Transaksi (opsional)</label><select id="map-txnstatus"><option value="">- tidak ada -</option></select></div>
       </div>
+      <div class="hint" style="margin-bottom:4px;">SKU dipakai buat mencocokkan produk secara presisi (hindari salah cocok kalau ada nama produk mirip/beda kapital dari marketplace). Kalau kolom SKU tidak dipetakan atau kosong di suatu baris, sistem otomatis balik mencocokkan berdasarkan Nama Produk.</div>
       <div class="field-section-label">Channel Penjualan</div>
       <div class="field-row">
         <div class="field"><label>Ambil dari Kolom</label><select id="map-channel"><option value="">- pakai channel tetap di samping -</option></select></div>
@@ -2306,7 +2325,7 @@ window.supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
         <div class="field" style="justify-content:flex-end;">
           <label style="display:flex;align-items:center;gap:8px;font-weight:600;cursor:pointer;">
             <input type="checkbox" id="import-mark-completed" checked style="width:16px;height:16px;">
-            Tandai semua transaksi "Selesai" (potong stok otomatis)
+            Tandai "Selesai" kalau Status Transaksi tidak dipetakan/kosong
           </label>
         </div>
       </div>
@@ -2403,7 +2422,6 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
       id: row.id, name: row.name, sku: row.sku || '',
       costPrice: Number(row.cost_price) || 0, sellPrice: Number(row.sell_price) || 0,
       minStock: Number(row.min_stock) || 0, recipe: Array.isArray(row.recipe) ? row.recipe : [],
-      channelPrices: (row.channel_prices && typeof row.channel_prices === 'object') ? row.channel_prices : {},
       updatedAt: row.updated_at,
     };
   }
@@ -2412,17 +2430,8 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
       name: p.name, sku: p.sku || null,
       cost_price: p.costPrice || 0, sell_price: p.sellPrice || 0,
       min_stock: p.minStock || 0, recipe: p.recipe || [],
-      channel_prices: p.channelPrices || {},
       updated_at: new Date().toISOString(),
     };
-  }
-  // harga jual efektif produk ini buat channel tertentu: pakai harga khusus channel
-  // kalau di-set, kalau nggak jatuh balik ke harga jual default produk.
-  function getEffectivePrice(productId, channelId) {
-    const product = state.products.find((p) => p.id === productId);
-    if (!product) return 0;
-    const override = channelId && product.channelPrices ? product.channelPrices[channelId] : undefined;
-    return (override !== undefined && override !== null && override !== '') ? Number(override) : product.sellPrice;
   }
   function movementRowToObj(row) {
     return {
@@ -2464,7 +2473,7 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
     return {
       id: row.id, transactionId: row.transaction_id, productId: row.product_id, locationId: row.location_id,
       qty: Number(row.qty) || 0, sellPrice: Number(row.sell_price) || 0, discount: Number(row.discount) || 0,
-      costPriceAtSale: Number(row.cost_price_at_sale) || 0, contentItemId: row.content_item_id || null,
+      costPriceAtSale: Number(row.cost_price_at_sale) || 0,
     };
   }
 
@@ -2859,8 +2868,7 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
       return {
         transaction_id: txnData.id, product_id: it.productId, location_id: it.locationId,
         qty: it.qty, sell_price: it.sellPrice, discount: it.discount || 0,
-        cost_price_at_sale: product ? product.costPrice : 0, content_item_id: it.contentItemId || null,
-        user_id: window.__currentUserId,
+        cost_price_at_sale: product ? product.costPrice : 0, user_id: window.__currentUserId,
       };
     });
     const { data: itemsData, error: itemsErr } = await sb.from('sales_transaction_items').insert(itemRows).select();
@@ -2966,7 +2974,7 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
   window.__stockSales = {
     STORE_KEY, EXPENSE_CATEGORIES, UNITS, PAYMENT_STATUSES, STOCK_CHANNELS,
     uid, todayStr, totalStock, availableStock, stockByLocation, stockBreakdown, reservedStock,
-    locationById, productById, channelById, materialById, state, load, persist, getEffectivePrice,
+    locationById, productById, channelById, materialById, state, load, persist,
     dbInsertLocation, dbRenameLocation, dbSetLocationActive,
     dbInsertProduct, dbUpdateProduct, dbDeleteProduct, dbInsertMovement,
     dbInsertAdjustment, dbStartOpnameSession, dbFinishOpname,
@@ -4301,7 +4309,7 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
       points: buildWeeklySeries(p, anMetric),
     })).filter((s) => s.points.length);
 
-    CH.renderMultiLineChart('analyticsTrendChart', series, {
+    chartEl.innerHTML = CH.multiLineChart(series, {
       emptyText: 'Belum ada konten "sudah posting" dengan tanggal untuk kombinasi filter ini.',
     });
 
@@ -4404,47 +4412,22 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
     const windowDays = C.state.attributionWindowDays || 7;
     const posted = C.state.items.filter((it) => it.status === 'posted' && it.date && it.linkedProductId);
 
-    // item transaksi yang SUDAH ditandai langsung ke suatu konten (dari dropdown "Sumber Konten" saat Catat
-    // Transaksi) — ini dikeluarkan dari estimasi jendela waktu konten LAIN biar nggak kehitung dobel.
-    const directlyLinkedItemIds = new Set(
-      S.state.salesTransactionItems.filter((si) => si.contentItemId).map((si) => si.id)
-    );
-
     return posted.map((it) => {
-      // 1) Atribusi LANGSUNG: baris transaksi yang di-tag persis ke konten ini lewat "Sumber Konten"
-      const directItems = S.state.salesTransactionItems.filter((si) => si.contentItemId === it.id);
-      const directCompleted = directItems.filter((si) => {
-        const txn = S.state.salesTransactions.find((t) => t.id === si.transactionId);
-        return txn && txn.transactionStatus === 'completed';
-      });
+      const endDate = new Date(it.date + 'T00:00:00');
+      endDate.setDate(endDate.getDate() + windowDays);
+      const windowEnd = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
 
-      let qty, revenue, isDirect;
-      if (directCompleted.length) {
-        qty = directCompleted.reduce((sum, si) => sum + si.qty, 0);
-        revenue = directCompleted.reduce((sum, si) => sum + (si.qty * si.sellPrice - si.discount), 0);
-        isDirect = true;
-      } else {
-        // 2) Fallback: estimasi jendela waktu (kalau belum ada yang ditandai langsung ke konten ini),
-        //    tapi jangan hitung baris yang sudah "diambil" konten lain lewat tag langsung.
-        const endDate = new Date(it.date + 'T00:00:00');
-        endDate.setDate(endDate.getDate() + windowDays);
-        const windowEnd = `${endDate.getFullYear()}-${String(endDate.getMonth() + 1).padStart(2, '0')}-${String(endDate.getDate()).padStart(2, '0')}`;
-        const completedTxnIds = new Set(
-          S.state.salesTransactions.filter((t) => t.transactionStatus === 'completed' && t.date >= it.date && t.date <= windowEnd).map((t) => t.id)
-        );
-        const attributed = S.state.salesTransactionItems.filter((si) =>
-          si.productId === it.linkedProductId && completedTxnIds.has(si.transactionId) && !directlyLinkedItemIds.has(si.id)
-        );
-        qty = attributed.reduce((sum, si) => sum + si.qty, 0);
-        revenue = attributed.reduce((sum, si) => sum + (si.qty * si.sellPrice - si.discount), 0);
-        isDirect = false;
-      }
-
+      const completedTxnIds = new Set(
+        S.state.salesTransactions.filter((t) => t.transactionStatus === 'completed' && t.date >= it.date && t.date <= windowEnd).map((t) => t.id)
+      );
+      const attributed = S.state.salesTransactionItems.filter((si) => si.productId === it.linkedProductId && completedTxnIds.has(si.transactionId));
+      const qty = attributed.reduce((sum, si) => sum + si.qty, 0);
+      const revenue = attributed.reduce((sum, si) => sum + (si.qty * si.sellPrice - si.discount), 0);
       const product = (S.state.products || []).find((p) => p.id === it.linkedProductId) || null;
       const views = (it.metrics && it.metrics.views) || 0;
       const rpm = views > 0 ? Math.round((revenue / views) * 1000) : 0;
 
-      return { item: it, product, qty, revenue, rpm, views, isDirect };
+      return { item: it, product, qty, revenue, rpm, views };
     });
   }
 
@@ -4457,7 +4440,7 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
     if (!noteEl) return;
 
     const windowDays = C.state.attributionWindowDays || 7;
-    noteEl.textContent = `Model atribusi: kalau saat "Catat Transaksi" kamu pilih "Sumber Konten", itu dipakai sebagai atribusi LANGSUNG (paling akurat). Kalau belum ditandai, sistem jatuh ke estimasi: penjualan produk yang sama dalam ${windowDays} hari setelah konten posting dianggap "terpengaruh" konten tersebut — bukan tracking klik eksak. Atur lama jendelanya di tombol "Atur Target".`;
+    noteEl.textContent = `Model atribusi: penjualan produk yang sama dalam ${windowDays} hari setelah konten posting dianggap "terpengaruh" konten tersebut. Ini estimasi berbasis waktu & produk, bukan tracking klik eksak — kalau ada 2 konten mempromosikan produk yang sama berdekatan waktunya, satu penjualan bisa ikut terhitung di keduanya. Atur lama jendelanya di tombol "Atur Target".`;
 
     if (!S || !S.state) {
       statsEl.innerHTML = `<div class="empty-note">Modul Stock & Penjualan belum termuat.</div>`;
@@ -4503,7 +4486,7 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
         <div class="an-roi-row">
           <div class="an-roi-rank">${i + 1}</div>
           <div class="an-roi-info">
-            <div class="an-roi-title">${C.escapeHtml(r.item.title || 'Tanpa judul')} <span class="txn-status-pill ${r.isDirect ? 'completed' : 'pending'}" style="margin-left:4px;">${r.isDirect ? 'Langsung' : 'Estimasi'}</span></div>
+            <div class="an-roi-title">${C.escapeHtml(r.item.title || 'Tanpa judul')}</div>
             <div class="an-roi-meta">${r.item.platform} • ${r.product ? C.escapeHtml(r.product.name) : 'Produk terhapus'} • ${r.qty} pcs terjual</div>
           </div>
           <div class="an-roi-value">
@@ -4983,22 +4966,6 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
     bindRecipeRowEvents();
   }
 
-  function renderChannelPriceRows(existingPrices) {
-    const el = document.getElementById('prd-channel-prices-rows');
-    if (!el) return;
-    const activeChannels = S.state.salesChannels.filter((c) => c.isActive);
-    if (!activeChannels.length) {
-      el.innerHTML = `<div class="recipe-empty-note">Belum ada channel penjualan. Tambah dulu lewat "Kelola Channel" di halaman Progress Penjualan.</div>`;
-      return;
-    }
-    const prices = existingPrices || {};
-    el.innerHTML = `<div class="field-row-3">` + activeChannels.map((c) => `
-      <div class="field" data-channel-price-row data-channel-id="${c.id}">
-        <label>${esc(c.name)}</label>
-        <input type="text" inputmode="numeric" class="channel-price-input" placeholder="pakai default" value="${prices[c.id] !== undefined && prices[c.id] !== null ? prices[c.id] : ''}">
-      </div>`).join('') + `</div>`;
-  }
-
   function openProductModal(id) {
     editingProductId = id || null;
     const item = id ? S.state.products.find(p => p.id === id) : null;
@@ -5008,10 +4975,6 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
     document.getElementById('prd-minstock').value = item ? item.minStock : '';
     document.getElementById('prd-costprice').value = item ? item.costPrice : '';
     document.getElementById('prd-sellprice').value = item ? item.sellPrice : '';
-    const hasChannelPrices = !!(item && item.channelPrices && Object.keys(item.channelPrices).length);
-    document.getElementById('prd-use-channel-prices').checked = hasChannelPrices;
-    document.getElementById('prd-channel-prices-section').style.display = hasChannelPrices ? 'block' : 'none';
-    renderChannelPriceRows(item ? item.channelPrices : {});
     document.getElementById('prd-initial-stock-section').style.display = item ? 'none' : 'block';
     document.getElementById('prd-stock-readonly-note').style.display = item ? 'block' : 'none';
     if (!item) renderInitialStockRows();
@@ -5035,14 +4998,6 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
       if (materialId && qty > 0) recipe.push({ materialId, qty });
     });
 
-    const channelPrices = {};
-    if (document.getElementById('prd-use-channel-prices').checked) {
-      document.querySelectorAll('#prd-channel-prices-rows [data-channel-price-row]').forEach((row) => {
-        const val = row.querySelector('.channel-price-input').value;
-        if (val !== '' && val !== null) channelPrices[row.dataset.channelId] = numOrZero(val);
-      });
-    }
-
     const data = {
       name,
       sku: document.getElementById('prd-sku').value.trim(),
@@ -5050,7 +5005,6 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
       sellPrice: numOrZero(document.getElementById('prd-sellprice').value),
       minStock: numOrZero(document.getElementById('prd-minstock').value),
       recipe,
-      channelPrices,
     };
 
     const btnSave = document.getElementById('btnSavePrdModal');
@@ -5265,15 +5219,26 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
   }
 
   /* ---------- LOKASI STOK ---------- */
+  const DEFAULT_LOCATION_PRESETS = ['Shopee', 'TikTok Shop', 'Tokopedia', 'Lazada', 'Offline', 'Cadangan'];
+
   function renderLocations() {
     const el = document.getElementById('locationsGrid');
     if (!el) return;
+    const existingNames = new Set(S.state.locations.map((l) => l.name.trim().toLowerCase()));
+    const missingPresets = DEFAULT_LOCATION_PRESETS.filter((p) => !existingNames.has(p.toLowerCase()));
+    const presetHtml = missingPresets.length ? `
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:14px;">
+        <span class="hint" style="margin-right:2px;">Tambah cepat:</span>
+        ${missingPresets.map((p) => `<button type="button" class="btn btn-ghost btn-sm" data-add-preset-loc="${esc(p)}">+ ${esc(p)}</button>`).join('')}
+      </div>` : '';
     if (!S.state.locations.length) {
-      el.innerHTML = `<div class="empty-note">Belum ada lokasi stok. Tambah lokasi pertama kamu (mis. Shopee, TikTok Shop, Gudang) 🌸</div>`;
+      el.innerHTML = `${presetHtml}<div class="empty-note">Belum ada lokasi stok. Tambah lokasi pertama kamu (mis. Shopee, TikTok Shop, Gudang) 🌸</div>`;
+      el.querySelectorAll('[data-add-preset-loc]').forEach((b) => b.addEventListener('click', () => addPresetLocation(b.dataset.addPresetLoc)));
       return;
     }
     const rows = S.state.locations.slice().sort((a, b) => a.sortOrder - b.sortOrder);
     el.innerHTML = `
+      ${presetHtml}
       <div class="table-wrap">
         <table>
           <thead><tr><th>Nama Lokasi</th><th class="num-cell">Total Stok di Sini</th><th>Status</th><th></th></tr></thead>
@@ -5296,6 +5261,13 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
         </table>
       </div>`;
     el.querySelectorAll('[data-edit-loc]').forEach((b) => b.addEventListener('click', () => openLocationModal(b.dataset.editLoc)));
+    el.querySelectorAll('[data-add-preset-loc]').forEach((b) => b.addEventListener('click', () => addPresetLocation(b.dataset.addPresetLoc)));
+  }
+
+  async function addPresetLocation(name) {
+    const inserted = await S.dbInsertLocation(name);
+    if (inserted) window.__charmory.showToast(`Lokasi "${name}" ditambahkan.`, 'success');
+    renderStockPage();
   }
 
   function openLocationModal(id) {
@@ -5840,9 +5812,6 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
     document.getElementById('btnSavePrdModal').addEventListener('click', saveProduct);
     document.getElementById('btnDeletePrdInModal').addEventListener('click', () => { if (editingProductId) confirmDeleteGeneric('product', editingProductId, 'produk ini'); });
     document.getElementById('productModalOverlay').addEventListener('click', (e) => { if (e.target.id === 'productModalOverlay') closeProductModal(); });
-    document.getElementById('prd-use-channel-prices').addEventListener('change', (e) => {
-      document.getElementById('prd-channel-prices-section').style.display = e.target.checked ? 'block' : 'none';
-    });
     document.getElementById('btnAddRecipeRow').addEventListener('click', () => {
       document.getElementById('prd-recipe-rows').insertAdjacentHTML('beforeend', recipeRowHtml({ materialId: '', qty: '' }));
       bindRecipeRowEvents();
@@ -5920,10 +5889,9 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
 
 <script>
 /* ==========================================================================
-   CHARTS — dibangun di atas Chart.js (interaktif: hover tooltip, klik utk
-   cross-filter). Semua fungsi render langsung ke elemen container by-id
-   (bukan lagi return string SVG). Palet warna tetap mengikuti CSS custom
-   properties yang sama dengan app.
+   CHARTS — SVG chart generators, no external library.
+   Semua fungsi return string SVG siap di-innerHTML-kan.
+   Palet warna mengikuti CSS custom properties yang sama dengan app.
    ========================================================================== */
 (function () {
   'use strict';
@@ -5950,221 +5918,251 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
     return String(Math.round(n));
   }
 
-  /* ---- manajemen instance Chart.js: pastikan re-render nggak numpuk/bocor ---- */
-  const chartInstances = {};
-  function mountCanvas(containerId) {
-    const container = document.getElementById(containerId);
-    if (!container) return null;
-    if (chartInstances[containerId]) {
-      chartInstances[containerId].destroy();
-      delete chartInstances[containerId];
-    }
-    container.classList.add('chartjs-box');
-    container.innerHTML = '<canvas></canvas>';
-    return container.querySelector('canvas');
-  }
-  function registerChart(containerId, chart) {
-    chartInstances[containerId] = chart;
-  }
-  function emptyState(containerId, text) {
-    const container = document.getElementById(containerId);
-    if (container) container.innerHTML = `<div class="chart-empty">${esc(text)}</div>`;
-  }
-  const baseTooltip = {
-    backgroundColor: COLORS.ink, titleColor: '#fff', bodyColor: '#fff',
-    padding: 10, cornerRadius: 8, titleFont: { family: 'Inter,sans-serif', size: 12 },
-    bodyFont: { family: 'Inter,sans-serif', size: 12 }, displayColors: false,
-  };
-  // plugin kecil buat nulis teks di tengah donut chart (persentase besar)
-  let centerTextPluginRegistered = false;
-  function ensureCenterTextPlugin() {
-    if (centerTextPluginRegistered || typeof Chart === 'undefined') return;
-    Chart.register({
-      id: 'centerText',
-      beforeDraw(chart) {
-        const opts = chart.options.plugins && chart.options.plugins.centerText;
-        if (!opts) return;
-        const { ctx, chartArea: { left, right, top, bottom } } = chart;
-        const cx = (left + right) / 2, cy = (top + bottom) / 2;
-        ctx.save();
-        ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
-        ctx.font = "700 26px Fraunces, serif"; ctx.fillStyle = COLORS.ink;
-        ctx.fillText(opts.big, cx, cy - 6);
-        ctx.font = "400 10.5px Inter, sans-serif"; ctx.fillStyle = COLORS.inkFaint;
-        ctx.fillText(opts.small, cx, cy + 14);
-        ctx.restore();
-      },
-    });
-    centerTextPluginRegistered = true;
-  }
-
   /* ==========================================================
      1. LINE / AREA CHART — untuk tren penjualan dari waktu ke waktu
-     data: [{label, value}]
-     opts: {color, emptyText, onClick(label, index)}
+     data: [{label, value, fullDate?}]
      ========================================================== */
-  function renderLineChart(containerId, data, opts) {
+  function lineChart(data, opts) {
     opts = opts || {};
-    if (typeof Chart === 'undefined') { emptyState(containerId, 'Chart.js belum siap dimuat, cek koneksi internet.'); return; }
-    if (!data || !data.length || data.every((d) => d.value === 0)) {
-      emptyState(containerId, opts.emptyText || 'Belum ada data penjualan untuk digambarkan di periode ini.');
-      return;
-    }
-    const canvas = mountCanvas(containerId);
-    if (!canvas) return;
+    const w = 560, h = 220;
+    const pad = { top: 20, right: 18, bottom: 30, left: 46 };
+    const chartW = w - pad.left - pad.right;
+    const chartH = h - pad.top - pad.bottom;
     const color = opts.color || COLORS.sakuraDeep;
-    const chart = new Chart(canvas.getContext('2d'), {
-      type: 'line',
-      data: {
-        labels: data.map((d) => d.label),
-        datasets: [{
-          data: data.map((d) => d.value),
-          borderColor: color, backgroundColor: color + '30',
-          fill: true, tension: 0.3, pointRadius: 3, pointHoverRadius: 6,
-          pointBackgroundColor: COLORS.paper, pointBorderColor: color, pointBorderWidth: 2,
-        }],
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        interaction: { mode: 'index', intersect: false },
-        plugins: {
-          legend: { display: false },
-          tooltip: Object.assign({}, baseTooltip, { callbacks: { label: (ctx) => rp(ctx.parsed.y) } }),
-        },
-        scales: {
-          y: { beginAtZero: true, grid: { color: COLORS.lineSoft }, ticks: { color: COLORS.inkFaint, font: { size: 10.5 }, callback: (v) => rpShort(v) } },
-          x: { grid: { display: false }, ticks: { color: COLORS.inkFaint, font: { size: 10.5 } } },
-        },
-        onClick: opts.onClick ? (evt, elements) => { if (elements.length) opts.onClick(data[elements[0].index].label, elements[0].index); } : undefined,
-        onHover: opts.onClick ? (evt, elements) => { evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; } : undefined,
-      },
-    });
-    registerChart(containerId, chart);
+
+    if (!data || !data.length || data.every(d => d.value === 0)) {
+      return `<div class="chart-empty">Belum ada data penjualan untuk digambarkan di periode ini.</div>`;
+    }
+
+    const maxValRaw = Math.max(...data.map(d => d.value));
+    const maxVal = maxValRaw <= 0 ? 1 : maxValRaw * 1.15;
+    const n = data.length;
+    const stepX = n > 1 ? chartW / (n - 1) : 0;
+
+    const points = data.map((d, i) => ({
+      x: pad.left + (n > 1 ? i * stepX : chartW / 2),
+      y: pad.top + chartH - (d.value / maxVal) * chartH,
+      ...d,
+    }));
+
+    const linePath = points.map((p, i) => (i === 0 ? 'M' : 'L') + p.x.toFixed(1) + ',' + p.y.toFixed(1)).join(' ');
+    const areaPath = n > 1
+      ? linePath + ` L${points[n - 1].x.toFixed(1)},${(pad.top + chartH).toFixed(1)} L${points[0].x.toFixed(1)},${(pad.top + chartH).toFixed(1)} Z`
+      : '';
+
+    // grid horizontal (3 garis) + label sumbu Y
+    const gridLines = [0, 0.5, 1].map((frac) => {
+      const y = pad.top + chartH * (1 - frac);
+      const val = maxVal * frac;
+      return `
+        <line x1="${pad.left}" y1="${y.toFixed(1)}" x2="${w - pad.right}" y2="${y.toFixed(1)}" stroke="${COLORS.lineSoft}" stroke-width="1"/>
+        <text x="${pad.left - 8}" y="${(y + 3.5).toFixed(1)}" text-anchor="end" font-size="9.5" fill="${COLORS.inkFaint}" font-family="Inter,sans-serif">${rpShort(val)}</text>
+      `;
+    }).join('');
+
+    // label sumbu X — kalau titik terlalu banyak, tampilkan sebagian saja
+    const labelEvery = n > 10 ? Math.ceil(n / 7) : 1;
+    const xLabels = points.map((p, i) => {
+      if (i % labelEvery !== 0 && i !== n - 1) return '';
+      return `<text x="${p.x.toFixed(1)}" y="${h - 8}" text-anchor="middle" font-size="9.5" fill="${COLORS.inkFaint}" font-family="Inter,sans-serif">${esc(p.label)}</text>`;
+    }).join('');
+
+    const dots = points.map((p, i) => {
+      const isLast = i === n - 1;
+      return `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${isLast ? 4.5 : 3}" fill="${isLast ? color : COLORS.paper}" stroke="${color}" stroke-width="2">
+        <title>${esc(p.label)}: ${rp(p.value)}</title>
+      </circle>`;
+    }).join('');
+
+    const gradId = 'lineGrad' + Math.random().toString(36).slice(2, 8);
+
+    return `
+      <div class="chart-wrap">
+        <svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <linearGradient id="${gradId}" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stop-color="${color}" stop-opacity="0.28"/>
+              <stop offset="100%" stop-color="${color}" stop-opacity="0.02"/>
+            </linearGradient>
+          </defs>
+          ${gridLines}
+          ${areaPath ? `<path d="${areaPath}" fill="url(#${gradId})"/>` : ''}
+          <path d="${linePath}" fill="none" stroke="${color}" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+          ${dots}
+          ${xLabels}
+        </svg>
+      </div>
+    `;
   }
 
   /* ==========================================================
      2. HORIZONTAL BAR CHART — untuk produk terlaris
      data: [{label, value}] sudah harus terurut descending
-     opts: {emptyText, valueLabel, onClick(label, index)}
      ========================================================== */
-  function renderHorizontalBarChart(containerId, data, opts) {
+  function horizontalBarChart(data, opts) {
     opts = opts || {};
-    if (typeof Chart === 'undefined') { emptyState(containerId, 'Chart.js belum siap dimuat, cek koneksi internet.'); return; }
+    const format = opts.format || 'qty'; // 'qty' -> "12x" (default, dipakai Produk Terlaris) | 'rupiah' -> "Rp120rb" (dipakai Produk Paling Menguntungkan)
+    const emptyText = opts.emptyText || 'Belum ada penjualan produk di periode ini.';
     if (!data || !data.length) {
-      emptyState(containerId, opts.emptyText || 'Belum ada data untuk digambarkan.');
-      return;
+      return `<div class="chart-empty">${esc(emptyText)}</div>`;
     }
-    const canvas = mountCanvas(containerId);
-    if (!canvas) return;
     const top = data.slice(0, 8);
-    const chart = new Chart(canvas.getContext('2d'), {
-      type: 'bar',
-      data: {
-        labels: top.map((d) => (d.label.length > 24 ? d.label.slice(0, 23) + '…' : d.label)),
-        datasets: [{
-          data: top.map((d) => d.value),
-          backgroundColor: top.map((d, i) => (i === 0 ? COLORS.sakuraDeep : COLORS.sakura)),
-          borderRadius: 6, maxBarThickness: 22,
-        }],
-      },
-      options: {
-        indexAxis: 'y', responsive: true, maintainAspectRatio: false,
-        plugins: {
-          legend: { display: false },
-          tooltip: Object.assign({}, baseTooltip, { callbacks: { label: (ctx) => opts.valueLabel ? `${ctx.parsed.x} ${opts.valueLabel}` : rp(ctx.parsed.x) } }),
-        },
-        scales: {
-          x: { beginAtZero: true, grid: { color: COLORS.lineSoft }, ticks: { color: COLORS.inkFaint, font: { size: 10.5 } } },
-          y: { grid: { display: false }, ticks: { color: COLORS.ink, font: { size: 11.5, weight: '700' } } },
-        },
-        onClick: opts.onClick ? (evt, elements) => { if (elements.length) opts.onClick(data[elements[0].index].label, elements[0].index); } : undefined,
-        onHover: opts.onClick ? (evt, elements) => { evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; } : undefined,
-      },
-    });
-    registerChart(containerId, chart);
-    if (data.length > 8) {
-      document.getElementById(containerId).insertAdjacentHTML('beforeend', `<div style="font-size:11.5px;color:var(--ink-faint);margin-top:6px;">+ ${data.length - 8} produk lainnya</div>`);
-    }
+    const rest = data.length - top.length;
+    const maxVal = Math.max(...top.map(d => Math.abs(d.value)), 1);
+    const rowH = 34;
+    const w = 560;
+    const h = top.length * rowH + 12;
+    const labelW = 130;
+    const barMaxW = w - labelW - 70;
+    const barColor = opts.barColor || COLORS.sakuraDeep;
+    const barColorAlt = opts.barColorAlt || COLORS.sakura;
+    const fmtValue = (v) => format === 'rupiah' ? rp(v) : `${v}x`;
+    const fmtTooltip = (v) => format === 'rupiah' ? rp(v) : `${v} terjual`;
+
+    const rows = top.map((d, i) => {
+      const barW = Math.max(4, (Math.abs(d.value) / maxVal) * barMaxW);
+      const y = i * rowH + 6;
+      const isTop = i === 0;
+      const isNegative = d.value < 0;
+      const shortLabel = d.label.length > 20 ? d.label.slice(0, 19) + '…' : d.label;
+      return `
+        <g>
+          <text x="0" y="${y + 15}" font-size="12" font-weight="700" fill="${COLORS.ink}" font-family="Inter,sans-serif">${esc(shortLabel)}<title>${esc(d.label)}</title></text>
+          <rect x="${labelW}" y="${y + 3}" width="${barMaxW}" height="16" rx="8" fill="${COLORS.bgAlt}"/>
+          <rect x="${labelW}" y="${y + 3}" width="${barW.toFixed(1)}" height="16" rx="8" fill="${isNegative ? COLORS.danger : (isTop ? barColor : barColorAlt)}">
+            <title>${esc(d.label)}: ${fmtTooltip(d.value)}</title>
+          </rect>
+          <text x="${labelW + barMaxW + 10}" y="${y + 15}" font-size="11.5" font-weight="800" fill="${COLORS.inkSoft}" font-family="Inter,sans-serif">${fmtValue(d.value)}</text>
+        </g>
+      `;
+    }).join('');
+
+    return `
+      <div class="chart-wrap">
+        <svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">${rows}</svg>
+        ${rest > 0 ? `<div style="font-size:11.5px;color:var(--ink-faint);margin-top:6px;">+ ${rest} produk lainnya</div>` : ''}
+      </div>
+    `;
   }
 
   /* ==========================================================
      3. DONUT CHART — untuk distribusi untung/rugi
-     segments: [{label, value, color, key?}]
-     opts: {emptyText, centerText:{big,small}, onClick(label, index)}
+     segments: [{label, value, color}]
      ========================================================== */
-  function renderDonutChart(containerId, segments, opts) {
+  function donutChart(segments, opts) {
     opts = opts || {};
-    if (typeof Chart === 'undefined') { emptyState(containerId, 'Chart.js belum siap dimuat, cek koneksi internet.'); return; }
-    const filtered = segments.filter((s) => s.value > 0);
+    const filtered = segments.filter(s => s.value > 0);
     const total = filtered.reduce((sum, s) => sum + s.value, 0);
     if (!filtered.length || total <= 0) {
-      emptyState(containerId, opts.emptyText || 'Belum ada transaksi penjualan di periode ini.');
-      return;
+      return `<div class="chart-empty">Belum ada transaksi penjualan di periode ini.</div>`;
     }
-    ensureCenterTextPlugin();
-    const canvas = mountCanvas(containerId);
-    if (!canvas) return;
-    const chart = new Chart(canvas.getContext('2d'), {
-      type: 'doughnut',
-      data: {
-        labels: filtered.map((s) => s.label),
-        datasets: [{ data: filtered.map((s) => s.value), backgroundColor: filtered.map((s) => s.color), borderColor: COLORS.paper, borderWidth: 2 }],
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false, cutout: '68%',
-        plugins: {
-          legend: { position: 'right', labels: { color: COLORS.inkSoft, font: { family: 'Inter,sans-serif', size: 11.5 }, usePointStyle: true, boxWidth: 8 } },
-          tooltip: Object.assign({}, baseTooltip, { callbacks: { label: (ctx) => `${ctx.label}: ${rp(ctx.parsed)} (${Math.round((ctx.parsed / total) * 100)}%)` } }),
-          centerText: opts.centerText || null,
-        },
-        onClick: opts.onClick ? (evt, elements) => { if (elements.length) opts.onClick(filtered[elements[0].index].label, elements[0].index); } : undefined,
-        onHover: opts.onClick ? (evt, elements) => { evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; } : undefined,
-      },
-    });
-    registerChart(containerId, chart);
+    const size = 200, cx = size / 2, cy = size / 2, r = 72, stroke = 30;
+    const circumference = 2 * Math.PI * r;
+    let offsetAcc = 0;
+
+    const arcs = filtered.map((s) => {
+      const frac = s.value / total;
+      const dash = frac * circumference;
+      const gap = circumference - dash;
+      const rotation = (offsetAcc / total) * 360 - 90;
+      offsetAcc += s.value;
+      return `
+        <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="${s.color}" stroke-width="${stroke}"
+          stroke-dasharray="${dash.toFixed(1)} ${gap.toFixed(1)}"
+          transform="rotate(${rotation.toFixed(2)} ${cx} ${cy})" stroke-linecap="butt">
+          <title>${esc(s.label)}: ${rp(s.value)} (${Math.round(frac * 100)}%)</title>
+        </circle>
+      `;
+    }).join('');
+
+    const untungSeg = filtered.find(s => s.key === 'untung');
+    const untungPct = untungSeg ? Math.round((untungSeg.value / total) * 100) : 0;
+
+    const legend = segments.map((s) => `
+      <div class="chart-legend-item">
+        <span class="chart-legend-dot" style="background:${s.color};"></span>
+        ${esc(s.label)}: <b>${rp(s.value)}</b>
+      </div>
+    `).join('');
+
+    return `
+      <div class="chart-wrap" style="display:flex;align-items:center;gap:20px;flex-wrap:wrap;">
+        <svg class="donut-svg" viewBox="0 0 ${size} ${size}">
+          ${arcs}
+          <text x="${cx}" y="${cy - 4}" text-anchor="middle" font-size="26" font-weight="700" fill="${COLORS.ink}" font-family="Fraunces,serif">${untungPct}%</text>
+          <text x="${cx}" y="${cy + 16}" text-anchor="middle" font-size="10.5" fill="${COLORS.inkFaint}" font-family="Inter,sans-serif">omzet untung</text>
+        </svg>
+        <div style="flex:1;min-width:160px;">${legend}</div>
+      </div>
+    `;
   }
 
   /* ==========================================================
      4. GROUPED BAR CHART — untuk perbandingan channel
      data: [{label, values: [{key, value, color}]}]
      seriesLegend: [{key, label, color}]
-     opts: {emptyText, onClick(label, index)}
      ========================================================== */
-  function renderGroupedBarChart(containerId, data, seriesLegend, opts) {
+  function groupedBarChart(data, seriesLegend, opts) {
     opts = opts || {};
-    if (typeof Chart === 'undefined') { emptyState(containerId, 'Chart.js belum siap dimuat, cek koneksi internet.'); return; }
-    const hasAny = data.some((d) => d.values.some((v) => v.value > 0));
+    const hasAny = data.some(d => d.values.some(v => v.value > 0));
     if (!data.length || !hasAny) {
-      emptyState(containerId, opts.emptyText || 'Belum ada data buat dibandingkan di periode ini.');
-      return;
+      return `<div class="chart-empty">Belum ada penjualan tercatat per channel di periode ini.</div>`;
     }
-    const canvas = mountCanvas(containerId);
-    if (!canvas) return;
-    const chart = new Chart(canvas.getContext('2d'), {
-      type: 'bar',
-      data: {
-        labels: data.map((d) => d.label),
-        datasets: seriesLegend.map((s) => ({
-          label: s.label,
-          data: data.map((d) => { const v = d.values.find((x) => x.key === s.key); return v ? v.value : 0; }),
-          backgroundColor: s.color, borderRadius: 5, maxBarThickness: 34,
-        })),
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        plugins: {
-          legend: { position: 'bottom', labels: { color: COLORS.inkSoft, font: { family: 'Inter,sans-serif', size: 11 }, usePointStyle: true, boxWidth: 8 } },
-          tooltip: Object.assign({}, baseTooltip, { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${rp(ctx.parsed.y)}` } }),
-        },
-        scales: {
-          y: { beginAtZero: true, grid: { color: COLORS.lineSoft }, ticks: { color: COLORS.inkFaint, font: { size: 10.5 }, callback: (v) => rpShort(v) } },
-          x: { grid: { display: false }, ticks: { color: COLORS.inkSoft, font: { size: 10.5, weight: '700' } } },
-        },
-        onClick: opts.onClick ? (evt, elements) => { if (elements.length) opts.onClick(data[elements[0].index].label, elements[0].index); } : undefined,
-        onHover: opts.onClick ? (evt, elements) => { evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; } : undefined,
-      },
-    });
-    registerChart(containerId, chart);
+    const w = 560, h = 230;
+    const pad = { top: 16, right: 16, bottom: 34, left: 46 };
+    const chartW = w - pad.left - pad.right;
+    const chartH = h - pad.top - pad.bottom;
+
+    const maxVal = Math.max(1, ...data.flatMap(d => d.values.map(v => v.value)));
+    const groupCount = data.length;
+    const groupW = chartW / groupCount;
+    const seriesCount = seriesLegend.length;
+    const barGap = 4;
+    const barW = Math.min(34, (groupW - 24) / seriesCount - barGap);
+
+    const gridLines = [0, 0.5, 1].map((frac) => {
+      const y = pad.top + chartH * (1 - frac);
+      const val = maxVal * frac;
+      return `
+        <line x1="${pad.left}" y1="${y.toFixed(1)}" x2="${w - pad.right}" y2="${y.toFixed(1)}" stroke="${COLORS.lineSoft}" stroke-width="1"/>
+        <text x="${pad.left - 8}" y="${(y + 3.5).toFixed(1)}" text-anchor="end" font-size="9.5" fill="${COLORS.inkFaint}" font-family="Inter,sans-serif">${rpShort(val)}</text>
+      `;
+    }).join('');
+
+    const groups = data.map((d, gi) => {
+      const groupX = pad.left + gi * groupW;
+      const totalBarsW = seriesCount * barW + (seriesCount - 1) * barGap;
+      const startX = groupX + (groupW - totalBarsW) / 2;
+
+      const bars = d.values.map((v, si) => {
+        const barH = Math.max(2, (v.value / maxVal) * chartH);
+        const x = startX + si * (barW + barGap);
+        const y = pad.top + chartH - barH;
+        return `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${barW.toFixed(1)}" height="${barH.toFixed(1)}" rx="5" fill="${v.color}">
+          <title>${esc(d.label)} — ${esc(v.key)}: ${rp(v.value)}</title>
+        </rect>`;
+      }).join('');
+
+      const label = `<text x="${(groupX + groupW / 2).toFixed(1)}" y="${h - 12}" text-anchor="middle" font-size="10.5" font-weight="700" fill="${COLORS.inkSoft}" font-family="Inter,sans-serif">${esc(d.label)}</text>`;
+
+      return bars + label;
+    }).join('');
+
+    const legend = seriesLegend.map((s) => `
+      <div class="chart-legend-item">
+        <span class="chart-legend-dot" style="background:${s.color};"></span>${esc(s.label)}
+      </div>
+    `).join('');
+
+    return `
+      <div class="chart-wrap">
+        <svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">
+          ${gridLines}
+          ${groups}
+        </svg>
+        <div class="chart-legend">${legend}</div>
+      </div>
+    `;
   }
 
   function trendBadge(firstVal, lastVal) {
@@ -6192,60 +6190,78 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
      seriesArr: [{ key, label, color, points:[{label, value}] }]
      angka ditampilkan generik (bukan Rupiah).
      ========================================================== */
-  /* ==========================================================
-     5. MULTI-LINE CHART — untuk tren metrik konten (views/like/komentar)
-     bisa satu garis atau beberapa garis (per platform) sekaligus.
-     seriesArr: [{ key, label, color, points:[{label, value}] }]
-     angka ditampilkan generik (bukan Rupiah).
-     opts: {emptyText, onClick(seriesKey, label)}
-     ========================================================== */
-  function renderMultiLineChart(containerId, seriesArr, opts) {
+  function multiLineChart(seriesArr, opts) {
     opts = opts || {};
-    if (typeof Chart === 'undefined') { emptyState(containerId, 'Chart.js belum siap dimuat, cek koneksi internet.'); return; }
+    const w = 640, h = 250;
+    const pad = { top: 20, right: 18, bottom: 32, left: 42 };
+    const chartW = w - pad.left - pad.right;
+    const chartH = h - pad.top - pad.bottom;
+
     const usable = (seriesArr || []).filter((s) => s.points && s.points.length);
     const allVals = usable.flatMap((s) => s.points.map((p) => p.value));
     if (!usable.length || !allVals.length || allVals.every((v) => v === 0)) {
-      emptyState(containerId, opts.emptyText || 'Belum ada data untuk digambarkan di kombinasi filter ini.');
-      return;
+      return `<div class="chart-empty">${esc(opts.emptyText || 'Belum ada data untuk digambarkan di kombinasi filter ini.')}</div>`;
     }
-    const canvas = mountCanvas(containerId);
-    if (!canvas) return;
+
+    const n = Math.max(...usable.map((s) => s.points.length));
+    const maxValRaw = Math.max(...allVals);
+    const maxVal = maxValRaw <= 0 ? 1 : maxValRaw * 1.15;
+    const stepX = n > 1 ? chartW / (n - 1) : 0;
+
+    const gridLines = [0, 0.5, 1].map((frac) => {
+      const y = pad.top + chartH * (1 - frac);
+      const val = maxVal * frac;
+      return `
+        <line x1="${pad.left}" y1="${y.toFixed(1)}" x2="${w - pad.right}" y2="${y.toFixed(1)}" stroke="${COLORS.lineSoft}" stroke-width="1"/>
+        <text x="${pad.left - 8}" y="${(y + 3.5).toFixed(1)}" text-anchor="end" font-size="9.5" fill="${COLORS.inkFaint}" font-family="Inter,sans-serif">${numShort(val)}</text>
+      `;
+    }).join('');
+
     const labelSeries = usable.reduce((a, b) => (a.points.length >= b.points.length ? a : b));
-    const labels = labelSeries.points.map((p) => p.label);
-    const chart = new Chart(canvas.getContext('2d'), {
-      type: 'line',
-      data: {
-        labels,
-        datasets: usable.map((s) => ({
-          label: s.label,
-          data: s.points.map((p) => p.value),
-          borderColor: s.color, backgroundColor: s.color + '20',
-          tension: 0.3, pointRadius: 3, pointHoverRadius: 6,
-          pointBackgroundColor: COLORS.paper, pointBorderColor: s.color, pointBorderWidth: 2,
-        })),
-      },
-      options: {
-        responsive: true, maintainAspectRatio: false,
-        interaction: { mode: 'index', intersect: false },
-        plugins: {
-          legend: { display: usable.length > 1, position: 'bottom', labels: { color: COLORS.inkSoft, font: { family: 'Inter,sans-serif', size: 11 }, usePointStyle: true, boxWidth: 8 } },
-          tooltip: Object.assign({}, baseTooltip, { displayColors: true, callbacks: { label: (ctx) => `${ctx.dataset.label}: ${numShort(ctx.parsed.y)}` } }),
-        },
-        scales: {
-          y: { beginAtZero: true, grid: { color: COLORS.lineSoft }, ticks: { color: COLORS.inkFaint, font: { size: 10.5 }, callback: (v) => numShort(v) } },
-          x: { grid: { display: false }, ticks: { color: COLORS.inkFaint, font: { size: 10.5 } } },
-        },
-        onClick: opts.onClick ? (evt, elements) => { if (elements.length) opts.onClick(usable[elements[0].datasetIndex].key, labels[elements[0].index]); } : undefined,
-        onHover: opts.onClick ? (evt, elements) => { evt.native.target.style.cursor = elements.length ? 'pointer' : 'default'; } : undefined,
-      },
-    });
-    registerChart(containerId, chart);
+    const labelEvery = n > 9 ? Math.ceil(n / 7) : 1;
+    const xLabels = labelSeries.points.map((p, i) => {
+      if (i % labelEvery !== 0 && i !== n - 1) return '';
+      const x = pad.left + (n > 1 ? i * stepX : chartW / 2);
+      return `<text x="${x.toFixed(1)}" y="${h - 8}" text-anchor="middle" font-size="9.5" fill="${COLORS.inkFaint}" font-family="Inter,sans-serif">${esc(p.label)}</text>`;
+    }).join('');
+
+    const seriesSvg = usable.map((s) => {
+      const pts = s.points.map((p, i) => ({
+        x: pad.left + (n > 1 ? i * stepX : chartW / 2),
+        y: pad.top + chartH - (p.value / maxVal) * chartH,
+        ...p,
+      }));
+      const linePath = pts.map((p, i) => (i === 0 ? 'M' : 'L') + p.x.toFixed(1) + ',' + p.y.toFixed(1)).join(' ');
+      const dots = pts.map((p, i) => {
+        const isLast = i === pts.length - 1;
+        return `<circle cx="${p.x.toFixed(1)}" cy="${p.y.toFixed(1)}" r="${isLast ? 4.2 : 2.6}" fill="${isLast ? s.color : COLORS.paper}" stroke="${s.color}" stroke-width="2">
+          <title>${esc(s.label)} — ${esc(p.label)}: ${numShort(p.value)}</title>
+        </circle>`;
+      }).join('');
+      return `<path d="${linePath}" fill="none" stroke="${s.color}" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"/>${dots}`;
+    }).join('');
+
+    const legend = usable.length > 1 ? `
+      <div class="chart-legend">
+        ${usable.map((s) => `
+          <div class="chart-legend-item"><span class="chart-legend-dot" style="background:${s.color};"></span>${esc(s.label)}</div>
+        `).join('')}
+      </div>
+    ` : '';
+
+    return `
+      <div class="chart-wrap">
+        <svg viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">
+          ${gridLines}
+          ${seriesSvg}
+          ${xLabels}
+        </svg>
+        ${legend}
+      </div>
+    `;
   }
 
-  window.__charmoryCharts = {
-    renderLineChart, renderHorizontalBarChart, renderDonutChart, renderGroupedBarChart, renderMultiLineChart,
-    trendBadge, numShort, COLORS,
-  };
+  window.__charmoryCharts = { lineChart, horizontalBarChart, donutChart, groupedBarChart, multiLineChart, trendBadge, numShort, COLORS };
 })();
 
 </script>
@@ -6264,7 +6280,6 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
 
   let salesTab = 'catat'; // catat | pengeluaran | laporan
   let reportPeriod = 'harian'; // harian | mingguan | bulanan | total
-  let reportChannelFilter = null; // diisi saat user klik salah satu bar di chart Perbandingan Channel
   let editingExpenseId = null;
   let pendingDelete = null;
 
@@ -6337,6 +6352,21 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
     return { items, total: subtotal - (t.adminFee || 0) };
   }
 
+  // Nomor Transaksi otomatis (format TRX-YYYYMMDD-XXX), dibuat sistem untuk SEMUA transaksi —
+  // beda dari External Order ID yang cuma diisi/opsional untuk channel marketplace.
+  // Dihitung dari urutan tanggal + waktu dibuat (createdAt), bukan kolom database terpisah,
+  // supaya nomor selalu ada untuk transaksi lama maupun baru tanpa perlu migrasi data.
+  function transactionNumber(t) {
+    if (!t || !t.date) return '–';
+    const sameDay = S.state.salesTransactions
+      .filter((x) => x.date === t.date)
+      .slice()
+      .sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || '') || String(a.id).localeCompare(String(b.id)));
+    const idx = sameDay.findIndex((x) => x.id === t.id);
+    const seq = idx >= 0 ? idx + 1 : sameDay.length + 1;
+    return `TRX-${t.date.replace(/-/g, '')}-${String(seq).padStart(3, '0')}`;
+  }
+
   function renderCatatPenjualan() {
     renderTransactionsList();
   }
@@ -6354,7 +6384,7 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
     el.innerHTML = `
       <div class="table-wrap">
         <table>
-          <thead><tr><th></th><th>Tanggal</th><th>Channel</th><th>Order ID</th><th class="num-cell">Item</th><th class="num-cell">Total</th><th>Bayar</th><th>Status</th></tr></thead>
+          <thead><tr><th></th><th>No. Transaksi</th><th>Tanggal</th><th>Channel</th><th>Order ID</th><th class="num-cell">Item</th><th class="num-cell">Total</th><th>Bayar</th><th>Status</th></tr></thead>
           <tbody>
             ${sorted.map((t) => {
               const { items, total } = txnItemTotal(t);
@@ -6362,6 +6392,7 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
               return `
               <tr class="txn-row-expand" data-toggle-txn="${t.id}">
                 <td>${isExpanded ? '▾' : '▸'}</td>
+                <td style="font-size:11.5px;font-weight:700;color:var(--ink-soft);white-space:nowrap;">${transactionNumber(t)}</td>
                 <td>${C.fmtDateShort(t.date).d} ${C.fmtDateShort(t.date).m}</td>
                 <td>${channelBadge(t.channelId)}</td>
                 <td style="font-size:11.5px;color:var(--ink-faint);">${esc(t.externalOrderId || '–')}</td>
@@ -6371,20 +6402,18 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
                 <td>${txnStatusPill(t.transactionStatus)}</td>
               </tr>
               ${isExpanded ? `
-              <tr class="txn-detail-row"><td colspan="8">
+              <tr class="txn-detail-row"><td colspan="9">
                 <div class="table-wrap">
                   <table>
-                    <thead><tr><th>Produk</th><th>Lokasi</th><th>Sumber Konten</th><th class="num-cell">Qty</th><th class="num-cell">Harga Jual</th><th class="num-cell">Diskon</th><th class="num-cell">Modal</th><th class="num-cell">Subtotal</th></tr></thead>
+                    <thead><tr><th>Produk</th><th>Lokasi</th><th class="num-cell">Qty</th><th class="num-cell">Harga Jual</th><th class="num-cell">Diskon</th><th class="num-cell">Modal</th><th class="num-cell">Subtotal</th></tr></thead>
                     <tbody>
                       ${items.map((it) => {
                         const product = S.productById(it.productId);
                         const loc = S.locationById(it.locationId);
-                        const contentItem = it.contentItemId && C.state.items ? C.state.items.find((ci) => ci.id === it.contentItemId) : null;
                         const subtotal = it.qty * it.sellPrice - it.discount;
                         return `<tr>
                           <td class="title-cell">${esc(product ? product.name : '(produk dihapus)')}</td>
                           <td>${esc(loc ? loc.name : '–')}</td>
-                          <td style="font-size:11.5px;color:var(--ink-faint);">${contentItem ? esc(contentItem.platform + ' · ' + (contentItem.title || 'Tanpa judul')) : '–'}</td>
                           <td class="num-cell">${it.qty}</td>
                           <td class="num-cell">${rp(it.sellPrice)}</td>
                           <td class="num-cell">${rp(it.discount)}</td>
@@ -6397,7 +6426,7 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
                 </div>
                 <div style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:10px;margin-top:10px;">
                   <div class="hint">
-                    ${t.adminFee ? `Biaya admin: ${rp(t.adminFee)}. ` : ''}${t.paymentMethod ? `Metode bayar: ${esc(t.paymentMethod)}. ` : ''}${t.notes ? `Catatan: ${esc(t.notes)}` : ''}
+                    No. Transaksi: <b>${transactionNumber(t)}</b>. ${t.adminFee ? `Biaya admin: ${rp(t.adminFee)}. ` : ''}${t.paymentMethod ? `Metode bayar: ${esc(t.paymentMethod)}. ` : ''}${t.notes ? `Catatan: ${esc(t.notes)}` : ''}
                   </div>
                   <div style="display:flex;gap:8px;flex-wrap:wrap;">
                     ${t.transactionStatus === 'pending' ? `<button class="btn btn-ghost btn-sm" data-confirm-txn="${t.id}">Tandai Selesai</button>` : ''}
@@ -6449,37 +6478,15 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
   function locationOptionsHtml(selectedId) {
     return S.state.locations.filter((l) => l.isActive).map((l) => `<option value="${l.id}" ${l.id === selectedId ? 'selected' : ''}>${esc(l.name)}</option>`).join('') || `<option value="">Belum ada lokasi</option>`;
   }
-  function contentOptionsHtml(referenceDate, selectedId) {
-    const C = window.__charmory;
-    if (!C) return `<option value="">- tidak ada -</option>`;
-    const ref = referenceDate || S.todayStr();
-    const refDate = new Date(ref + 'T00:00:00');
-    const startDate = new Date(refDate.getTime());
-    startDate.setDate(startDate.getDate() - 7);
-    const startStr = `${startDate.getFullYear()}-${String(startDate.getMonth() + 1).padStart(2, '0')}-${String(startDate.getDate()).padStart(2, '0')}`;
-    const recent = C.state.items
-      .filter((it) => it.status === 'posted' && it.date && it.date >= startStr && it.date <= ref)
-      .sort((a, b) => b.date.localeCompare(a.date));
-    if (!recent.length) return `<option value="">- tidak ada konten 7 hari terakhir -</option>`;
-    return `<option value="">- tidak ada -</option>` + recent.map((it) => {
-      const d = C.fmtDateShort(it.date);
-      return `<option value="${it.id}" ${it.id === selectedId ? 'selected' : ''}>${esc(it.platform)} · ${esc(it.title || 'Tanpa judul')} (${d.d} ${d.m})</option>`;
-    }).join('');
-  }
   function txnItemRowHtml() {
     return `
       <div class="txn-item-row" data-txn-item-row>
-        <div class="txn-item-line-top">
-          <div class="field"><label>Produk</label><select class="txn-row-product">${productOptionsHtml()}</select></div>
-          <div class="field"><label>Lokasi Stok</label><select class="txn-row-location">${locationOptionsHtml()}</select></div>
-          <div class="field"><label>Sumber Konten <span class="hint">(opsional)</span></label><select class="txn-row-content">${contentOptionsHtml(document.getElementById('txn-date').value)}</select></div>
-        </div>
-        <div class="txn-item-line-bottom">
-          <div class="field"><label>Qty</label><input type="text" inputmode="numeric" class="txn-row-qty" value="1"></div>
-          <div class="field"><label>Harga Jual</label><input type="text" inputmode="numeric" class="txn-row-price" placeholder="0"></div>
-          <div class="field"><label>Diskon</label><input type="text" inputmode="numeric" class="txn-row-discount" placeholder="0"></div>
-          <button type="button" class="btn-icon txn-row-remove" aria-label="Hapus baris">${ICON.trash}</button>
-        </div>
+        <div class="field"><label>Produk</label><select class="txn-row-product">${productOptionsHtml()}</select></div>
+        <div class="field"><label>Lokasi Stok</label><select class="txn-row-location">${locationOptionsHtml()}</select></div>
+        <div class="field"><label>Qty</label><input type="text" inputmode="numeric" class="txn-row-qty" value="1"></div>
+        <div class="field"><label>Harga Jual</label><input type="text" inputmode="numeric" class="txn-row-price" placeholder="0"></div>
+        <div class="field"><label>Diskon</label><input type="text" inputmode="numeric" class="txn-row-discount" placeholder="0"></div>
+        <button type="button" class="btn-icon txn-row-remove" aria-label="Hapus baris">${ICON.trash}</button>
         <div class="txn-item-subtotal"></div>
       </div>`;
   }
@@ -6490,35 +6497,23 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
     row.querySelector('.txn-item-subtotal').textContent = `Subtotal: ${rp(qty * price - discount)}`;
     updateTxnTotals();
   }
-  function applyEffectivePrice(row) {
-    const productId = row.querySelector('.txn-row-product').value;
-    if (!productId || row.dataset.priceEdited) return;
-    const channelId = document.getElementById('txn-channel').value;
-    row.querySelector('.txn-row-price').value = S.getEffectivePrice(productId, channelId);
-    updateTxnRowSubtotal(row);
-  }
   function bindTxnRowEvents() {
     document.querySelectorAll('#txn-item-rows [data-txn-item-row]').forEach((row) => {
       if (row.dataset.bound) return;
       row.dataset.bound = '1';
-      row.querySelector('.txn-row-product').addEventListener('change', () => applyEffectivePrice(row));
+      row.querySelector('.txn-row-product').addEventListener('change', () => {
+        const product = S.productById(row.querySelector('.txn-row-product').value);
+        if (product && !row.dataset.priceEdited) row.querySelector('.txn-row-price').value = product.sellPrice;
+        updateTxnRowSubtotal(row);
+      });
       row.querySelector('.txn-row-price').addEventListener('input', () => { row.dataset.priceEdited = '1'; updateTxnRowSubtotal(row); });
       row.querySelector('.txn-row-qty').addEventListener('input', () => updateTxnRowSubtotal(row));
       row.querySelector('.txn-row-discount').addEventListener('input', () => updateTxnRowSubtotal(row));
       row.querySelector('.txn-row-remove').addEventListener('click', () => { row.remove(); updateTxnTotals(); });
-      if (!row.querySelector('.txn-row-price').value) applyEffectivePrice(row);
+      const initialProduct = S.productById(row.querySelector('.txn-row-product').value);
+      if (initialProduct && !row.querySelector('.txn-row-price').value) row.querySelector('.txn-row-price').value = initialProduct.sellPrice;
       updateTxnRowSubtotal(row);
     });
-  }
-  function refreshAllRowContentOptions() {
-    const date = document.getElementById('txn-date').value;
-    document.querySelectorAll('#txn-item-rows [data-txn-item-row] .txn-row-content').forEach((sel) => {
-      const current = sel.value;
-      sel.innerHTML = contentOptionsHtml(date, current);
-    });
-  }
-  function refreshAllRowPrices() {
-    document.querySelectorAll('#txn-item-rows [data-txn-item-row]').forEach((row) => applyEffectivePrice(row));
   }
   function updateTxnTotals() {
     const el = document.getElementById('txn-totals');
@@ -6579,7 +6574,6 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
     document.querySelectorAll('#txn-item-rows [data-txn-item-row]').forEach((row) => {
       const productId = row.querySelector('.txn-row-product').value;
       const locationId = row.querySelector('.txn-row-location').value;
-      const contentItemId = row.querySelector('.txn-row-content').value || null;
       const qty = numOrZero(row.querySelector('.txn-row-qty').value);
       const sellPrice = numOrZero(row.querySelector('.txn-row-price').value);
       const discount = numOrZero(row.querySelector('.txn-row-discount').value);
@@ -6592,7 +6586,7 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
           stockError = `Stok "${product ? product.name : ''}" di lokasi ini cuma ${available}, nggak cukup buat ${qty}.`;
         }
       }
-      items.push({ productId, locationId, contentItemId, qty, sellPrice, discount });
+      items.push({ productId, locationId, qty, sellPrice, discount });
     });
 
     if (stockError) { C.showToast(stockError, 'danger'); return; }
@@ -6619,15 +6613,24 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
   }
 
   /* ---- Modal Kelola Channel ---- */
+  const DEFAULT_CHANNEL_PRESETS = ['Shopee', 'TikTok Shop', 'Tokopedia', 'Lazada', 'Offline', 'WhatsApp', 'Instagram', 'Reseller'];
   function renderChannelListRows() {
     const el = document.getElementById('channelListRows');
     if (!el) return;
+    const existingNames = new Set(S.state.salesChannels.map((c) => c.name.trim().toLowerCase()));
+    const missingPresets = DEFAULT_CHANNEL_PRESETS.filter((p) => !existingNames.has(p.toLowerCase()));
+    const presetHtml = missingPresets.length ? `
+      <div style="display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-bottom:12px;">
+        <span class="hint" style="margin-right:2px;">Tambah cepat:</span>
+        ${missingPresets.map((p) => `<button type="button" class="btn btn-ghost btn-sm" data-add-preset-channel="${esc(p)}">+ ${esc(p)}</button>`).join('')}
+      </div>` : '';
     if (!S.state.salesChannels.length) {
-      el.innerHTML = `<div class="empty-note">Belum ada channel. Tambah dulu di bawah.</div>`;
+      el.innerHTML = `${presetHtml}<div class="empty-note">Belum ada channel. Tambah dulu di bawah, atau pakai tombol tambah cepat di atas.</div>`;
+      el.querySelectorAll('[data-add-preset-channel]').forEach((b) => b.addEventListener('click', () => addPresetChannel(b.dataset.addPresetChannel)));
       return;
     }
     const rows = S.state.salesChannels.slice().sort((a, b) => a.sortOrder - b.sortOrder);
-    el.innerHTML = rows.map((c) => `
+    el.innerHTML = presetHtml + rows.map((c) => `
       <div class="plat-row" style="${c.isActive ? '' : 'opacity:.5;'}">
         <span class="plat-name" style="flex:1;width:auto;">${esc(c.name)}</span>
         <button class="btn btn-ghost btn-sm" data-toggle-channel="${c.id}">${c.isActive ? 'Nonaktifkan' : 'Aktifkan'}</button>
@@ -6638,6 +6641,11 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
       const ok = await S.dbSetChannelActive(ch.id, !ch.isActive);
       if (ok) { ch.isActive = !ch.isActive; renderChannelListRows(); }
     }));
+    el.querySelectorAll('[data-add-preset-channel]').forEach((b) => b.addEventListener('click', () => addPresetChannel(b.dataset.addPresetChannel)));
+  }
+  async function addPresetChannel(name) {
+    const inserted = await S.dbInsertChannel(name);
+    if (inserted) { renderChannelListRows(); C.showToast(`Channel "${name}" ditambahkan.`, 'success'); }
   }
   function openChannelModal() {
     renderChannelListRows();
@@ -6677,15 +6685,41 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
   function downloadSalesImportTemplate() {
     if (!ensureXLSXSales()) return;
     const wsData = [
-      ['Tanggal', 'Channel', 'External Order ID', 'Nama Produk', 'Qty', 'Harga Jual', 'Diskon', 'Metode Bayar', 'Status Bayar', 'Biaya Admin', 'Catatan'],
-      ['2026-07-01', 'Shopee', 'INV-20260701-001', 'Bag Charm Sakura', 2, 25000, 0, 'Transfer Bank', 'Lunas', 1500, ''],
-      ['2026-07-01', 'Shopee', 'INV-20260701-001', 'Bag Charm Anime Custom', 1, 35000, 5000, 'Transfer Bank', 'Lunas', 1500, ''],
+      ['External Order ID', 'Platform', 'Tanggal Transaksi', 'SKU', 'Nama Produk', 'Qty', 'Harga Jual', 'Diskon', 'Biaya Admin', 'Biaya Platform', 'Metode Pembayaran', 'Status Pembayaran', 'Status Transaksi', 'Catatan'],
+      ['INV-20260701-001', 'Shopee', '2026-07-01', 'CH-SAK-01', 'Bag Charm Sakura', 2, 25000, 0, 1000, 500, 'Transfer Bank', 'Lunas', 'Selesai', ''],
+      ['INV-20260701-001', 'Shopee', '2026-07-01', 'CH-ANI-02', 'Bag Charm Anime Custom', 1, 35000, 5000, 1000, 500, 'Transfer Bank', 'Lunas', 'Selesai', ''],
+      ['INV-20260702-014', 'TikTok Shop', '2026-07-02', 'CH-SAK-01', 'Bag Charm Sakura', 3, 24000, 0, 800, 600, 'COD', 'Belum Bayar', 'Pending', 'Contoh order yang masih diproses'],
     ];
     const ws = XLSX.utils.aoa_to_sheet(wsData);
+    ws['!cols'] = [{wch:18},{wch:14},{wch:14},{wch:12},{wch:24},{wch:6},{wch:11},{wch:9},{wch:11},{wch:12},{wch:16},{wch:14},{wch:14},{wch:22}];
+
+    const petunjukData = [
+      ['Petunjuk Pengisian Template Import Penjualan Charmory'],
+      [''],
+      ['Kolom', 'Wajib?', 'Keterangan'],
+      ['External Order ID', 'Opsional untuk Offline/WhatsApp/Instagram/Reseller, disarankan untuk marketplace', 'Dipakai bareng Platform buat mendeteksi transaksi duplikat. Baris dengan Platform + External Order ID yang sama akan digabung jadi 1 transaksi multi-produk.'],
+      ['Platform', 'Wajib', 'Nama channel penjualan, mis. Shopee, TikTok Shop, Tokopedia, Lazada, Offline, WhatsApp, Instagram, Reseller. Kalau belum ada di Kelola Channel, akan dibuat otomatis saat import.'],
+      ['Tanggal Transaksi', 'Wajib', 'Format YYYY-MM-DD (mis. 2026-07-01) atau DD/MM/YYYY.'],
+      ['SKU', 'Opsional, disarankan', 'Kalau diisi, sistem mencocokkan produk berdasarkan SKU (presisi). Kalau kosong, sistem mencocokkan berdasarkan Nama Produk.'],
+      ['Nama Produk', 'Wajib', 'Harus sama persis dengan nama produk di Stock Management kalau SKU tidak diisi.'],
+      ['Qty', 'Wajib', 'Jumlah unit terjual.'],
+      ['Harga Jual', 'Wajib', 'Harga jual per unit (bukan total).'],
+      ['Diskon', 'Opsional', 'Nominal diskon per baris produk, default 0.'],
+      ['Biaya Admin', 'Opsional', 'Biaya admin per transaksi, default 0.'],
+      ['Biaya Platform', 'Opsional', 'Biaya potongan platform per transaksi (mis. komisi marketplace), default 0. Digabung dengan Biaya Admin jadi satu total biaya admin/platform di sistem.'],
+      ['Metode Pembayaran', 'Opsional', 'Mis. Transfer Bank, COD, QRIS, dll.'],
+      ['Status Pembayaran', 'Opsional, default Lunas', 'Pilihan: Lunas / Sebagian / Belum Bayar.'],
+      ['Status Transaksi', 'Opsional', 'Pilihan: Selesai / Pending / Dibatalkan / Retur. Kalau kosong, ikut pilihan checkbox saat import (default Selesai).'],
+      ['Catatan', 'Opsional', 'Catatan bebas.'],
+    ];
+    const wsPetunjuk = XLSX.utils.aoa_to_sheet(petunjukData);
+    wsPetunjuk['!cols'] = [{wch:20},{wch:34},{wch:70}];
+
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Penjualan');
+    XLSX.utils.book_append_sheet(wb, wsPetunjuk, 'Petunjuk');
     XLSX.writeFile(wb, 'Template_Import_Penjualan_Charmory.xlsx');
-    C.showToast('Template berhasil diunduh. Baris dengan Channel + Order ID sama akan digabung jadi 1 transaksi.', 'success');
+    C.showToast('Template berhasil diunduh. Baris dengan Platform + External Order ID sama akan digabung jadi 1 transaksi.', 'success');
   }
 
   function normalizeImportDate(raw) {
@@ -6709,16 +6743,19 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
     const norm = (h) => String(h).trim().toLowerCase();
     const find = (candidates) => headers.find((h) => candidates.includes(norm(h))) || '';
     return {
-      date: find(['tanggal', 'date', 'order date', 'tanggal pesanan', 'waktu pesanan dibuat']),
+      date: find(['tanggal', 'date', 'order date', 'tanggal pesanan', 'waktu pesanan dibuat', 'tanggal transaksi']),
       channel: find(['channel', 'platform', 'marketplace']),
       orderid: find(['external order id', 'order id', 'no. pesanan', 'no pesanan', 'order number', 'invoice', 'nomor pesanan']),
       product: find(['nama produk', 'produk', 'product', 'product name', 'nama barang']),
+      sku: find(['sku', 'kode produk', 'kode sku', 'seller sku', 'product sku']),
       qty: find(['qty', 'jumlah', 'quantity', 'jumlah produk dibeli']),
       price: find(['harga jual', 'harga', 'price', 'harga satuan', 'harga setelah diskon']),
       discount: find(['diskon', 'discount', 'total diskon']),
       paymethod: find(['metode bayar', 'payment method', 'metode pembayaran']),
       paystatus: find(['status bayar', 'payment status', 'status pembayaran']),
-      adminfee: find(['biaya admin', 'admin fee', 'biaya platform', 'biaya layanan']),
+      adminfee: find(['biaya admin', 'admin fee', 'biaya layanan']),
+      platformfee: find(['biaya platform', 'platform fee', 'biaya komisi', 'commission fee']),
+      txnstatus: find(['status transaksi', 'transaction status', 'status pesanan', 'order status']),
     };
   }
 
@@ -6745,6 +6782,7 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
         const guess = guessSalesMapping(importHeaders);
         populateMappingSelect('map-date', importHeaders, guess.date);
         populateMappingSelect('map-product', importHeaders, guess.product);
+        populateMappingSelect('map-sku', importHeaders, guess.sku);
         populateMappingSelect('map-qty', importHeaders, guess.qty);
         populateMappingSelect('map-price', importHeaders, guess.price);
         populateMappingSelect('map-discount', importHeaders, guess.discount);
@@ -6752,6 +6790,8 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
         populateMappingSelect('map-paymethod', importHeaders, guess.paymethod);
         populateMappingSelect('map-paystatus', importHeaders, guess.paystatus);
         populateMappingSelect('map-adminfee', importHeaders, guess.adminfee);
+        populateMappingSelect('map-platformfee', importHeaders, guess.platformfee);
+        populateMappingSelect('map-txnstatus', importHeaders, guess.txnstatus);
         populateMappingSelect('map-channel', importHeaders, guess.channel);
 
         document.getElementById('import-default-channel').innerHTML =
@@ -6789,6 +6829,18 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
     document.getElementById('btnBackImportStep').style.display = 'none';
   }
 
+  // Terjemahkan teks status transaksi dari file (macam-macam istilah marketplace) ke enum internal Charmory.
+  // Balikin null kalau teksnya kosong/nggak dikenali, supaya pemanggil bisa fallback ke default checkbox.
+  function mapImportStatusText(raw) {
+    const v = String(raw || '').trim().toLowerCase();
+    if (!v) return null;
+    if (['selesai', 'completed', 'complete', 'done', 'success', 'sukses', 'diterima', 'delivered'].includes(v)) return 'completed';
+    if (['pending', 'menunggu', 'diproses', 'processing', 'belum diproses', 'dikemas', 'dikirim', 'shipped'].includes(v)) return 'pending';
+    if (['dibatalkan', 'batal', 'cancelled', 'canceled', 'cancel'].includes(v)) return 'cancelled';
+    if (['retur', 'return', 'returned', 'dikembalikan', 'refund', 'refunded'].includes(v)) return 'returned';
+    return null;
+  }
+
   function proceedToImportPreview() {
     if (!importRawRows.length) { C.showToast('Pilih file dulu ya.', 'danger'); return; }
     const mapDate = document.getElementById('map-date').value;
@@ -6799,12 +6851,15 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
       C.showToast('Kolom Tanggal, Nama Produk, Qty, dan Harga Jual wajib dipetakan.', 'danger');
       return;
     }
+    const mapSku = document.getElementById('map-sku').value;
     const mapDiscount = document.getElementById('map-discount').value;
     const mapOrderId = document.getElementById('map-orderid').value;
     const mapChannel = document.getElementById('map-channel').value;
     const mapPayMethod = document.getElementById('map-paymethod').value;
     const mapPayStatus = document.getElementById('map-paystatus').value;
     const mapAdminFee = document.getElementById('map-adminfee').value;
+    const mapPlatformFee = document.getElementById('map-platformfee').value;
+    const mapTxnStatus = document.getElementById('map-txnstatus').value;
     const defaultChannelId = document.getElementById('import-default-channel').value;
     const defaultLocationId = document.getElementById('import-default-location').value;
     const markCompleted = document.getElementById('import-mark-completed').checked;
@@ -6812,12 +6867,14 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
     if (!mapChannel && !defaultChannelId) { C.showToast('Pilih channel dari kolom, atau pilih channel tetap di sampingnya.', 'danger'); return; }
     if (!defaultLocationId) { C.showToast('Pilih lokasi stok dulu ya (tambah di Stock Management kalau belum ada).', 'danger'); return; }
 
-    const unmatchedProducts = new Set();
+    const unmatchedBySku = new Set();
+    const unmatchedByName = new Set();
     const groupMap = new Map();
 
     importRawRows.forEach((row, idx) => {
       const date = normalizeImportDate(row[mapDate]);
       const productName = String(row[mapProduct] || '').trim();
+      const sku = mapSku ? String(row[mapSku] || '').trim() : '';
       const qty = numOrZero(row[mapQty]);
       const sellPrice = numOrZero(row[mapPrice]);
       if (!productName || qty <= 0) return;
@@ -6827,16 +6884,31 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
       const discount = mapDiscount ? numOrZero(row[mapDiscount]) : 0;
       const payMethod = mapPayMethod ? String(row[mapPayMethod] || '').trim() : '';
       const payStatus = mapPayStatus ? String(row[mapPayStatus] || '').trim() : 'Lunas';
-      const adminFee = mapAdminFee ? numOrZero(row[mapAdminFee]) : 0;
+      const adminFee = (mapAdminFee ? numOrZero(row[mapAdminFee]) : 0) + (mapPlatformFee ? numOrZero(row[mapPlatformFee]) : 0);
+      const txnStatus = mapTxnStatus ? mapImportStatusText(row[mapTxnStatus]) : null;
 
-      const product = S.state.products.find((p) => p.name.trim().toLowerCase() === productName.toLowerCase());
-      if (!product) unmatchedProducts.add(productName);
+      // SKU, kalau kolomnya dipetakan & terisi, jadi acuan utama pencocokan produk (lebih presisi
+      // daripada nama). Kalau SKU-nya nggak ketemu, baris ini DILEWATI (bukan fallback diam-diam ke
+      // nama) supaya salah-cocok produk bisa ketahuan. Kalau SKU tidak dipetakan/kosong, baru cocokkan
+      // berdasarkan nama produk seperti biasa.
+      let product = null;
+      if (sku) {
+        product = S.state.products.find((p) => p.sku && p.sku.trim().toLowerCase() === sku.toLowerCase());
+        if (!product) unmatchedBySku.add(`${sku} (${productName})`);
+      } else {
+        product = S.state.products.find((p) => p.name.trim().toLowerCase() === productName.toLowerCase());
+        if (!product) unmatchedByName.add(productName);
+      }
 
       const groupKey = orderId ? `${channelName}||${orderId}` : `__row_${idx}`;
       if (!groupMap.has(groupKey)) {
-        groupMap.set(groupKey, { date, channelName, externalOrderId: orderId, paymentMethod: payMethod, paymentStatus: payStatus || 'Lunas', adminFee, items: [] });
+        // adminFee (gabungan Biaya Admin + Biaya Platform) diambil sekali dari baris pertama tiap
+        // grup — bukan dijumlah tiap baris — karena file export marketplace biasanya mengulang nilai
+        // biaya per-order yang sama di setiap baris produk pada order multi-item yang sama.
+        groupMap.set(groupKey, { date, channelName, externalOrderId: orderId, paymentMethod: payMethod, paymentStatus: payStatus || 'Lunas', adminFee, transactionStatusRaw: txnStatus, items: [] });
       }
-      groupMap.get(groupKey).items.push({ productName, productId: product ? product.id : null, qty, sellPrice, discount });
+      const grp = groupMap.get(groupKey);
+      grp.items.push({ productName, sku, productId: product ? product.id : null, qty, sellPrice, discount });
     });
 
     const groups = Array.from(groupMap.values()).map((g) => {
@@ -6853,11 +6925,12 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
       }
       const isDuplicate = !channelIsNew && g.externalOrderId && S.transactionExists(channelId, g.externalOrderId);
       const validItems = g.items.filter((it) => it.productId);
-      return Object.assign({}, g, { channelId, channelIsNew, resolvedChannelName, isDuplicate, validItems, defaultLocationId, markCompleted });
+      const transactionStatus = g.transactionStatusRaw || (markCompleted ? 'completed' : 'pending');
+      return Object.assign({}, g, { channelId, channelIsNew, resolvedChannelName, isDuplicate, validItems, defaultLocationId, transactionStatus });
     });
 
     importParsedGroups = groups;
-    renderImportPreview(unmatchedProducts);
+    renderImportPreview(unmatchedByName, unmatchedBySku);
     document.getElementById('importStep1').style.display = 'none';
     document.getElementById('importStep2').style.display = 'block';
     document.getElementById('btnProceedImportPreview').style.display = 'none';
@@ -6865,24 +6938,29 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
     document.getElementById('btnBackImportStep').style.display = 'inline-flex';
   }
 
-  function renderImportPreview(unmatchedProducts) {
+  function renderImportPreview(unmatchedByName, unmatchedBySku) {
+    unmatchedByName = unmatchedByName || new Set();
+    unmatchedBySku = unmatchedBySku || new Set();
     const el = document.getElementById('importPreviewSummary');
     const validGroups = importParsedGroups.filter((g) => !g.isDuplicate && g.validItems.length);
     const duplicateGroups = importParsedGroups.filter((g) => g.isDuplicate);
     const totalQty = validGroups.reduce((sum, g) => sum + g.validItems.reduce((s, it) => s + it.qty, 0), 0);
     const totalOmzet = validGroups.reduce((sum, g) => sum + g.validItems.reduce((s, it) => s + (it.qty * it.sellPrice - it.discount), 0), 0);
     const newChannelNames = [...new Set(validGroups.filter((g) => g.channelIsNew).map((g) => g.resolvedChannelName))];
+    const statusCounts = validGroups.reduce((acc, g) => { acc[g.transactionStatus] = (acc[g.transactionStatus] || 0) + 1; return acc; }, {});
 
     el.innerHTML = `
       <div class="txn-totals" style="margin-top:0;">
         <div class="row"><span>Transaksi siap diimpor</span><span style="font-weight:800;color:var(--sage-deep);">${validGroups.length}</span></div>
         <div class="row"><span>Total qty</span><span>${totalQty.toLocaleString('id-ID')} pcs</span></div>
+        <div class="row"><span>Status transaksi</span><span>${Object.entries(statusCounts).map(([k,v]) => `${TXN_STATUS_LABEL[k]||k} (${v})`).join(', ') || '–'}</span></div>
         <div class="row grand"><span>Estimasi Omzet Masuk</span><span>${rp(totalOmzet)}</span></div>
       </div>
       ${duplicateGroups.length ? `<div class="hint" style="margin-top:12px;color:#B84A3E;">⚠️ ${duplicateGroups.length} transaksi <b>dilewati</b> karena Channel + External Order ID-nya sudah pernah tercatat (duplikat).</div>` : ''}
-      ${unmatchedProducts.size ? `<div class="hint" style="margin-top:8px;color:#B84A3E;">⚠️ Baris dengan produk berikut <b>dilewati</b> karena nama produknya nggak ketemu di Stock Management: ${[...unmatchedProducts].map((n) => esc(n)).join(', ')}. Samakan dulu nama produknya di file atau di Stock Management, lalu import ulang kalau perlu.</div>` : ''}
+      ${unmatchedBySku.size ? `<div class="hint" style="margin-top:8px;color:#B84A3E;">⚠️ Baris dengan SKU berikut <b>dilewati</b> karena SKU-nya nggak ketemu di Stock Management: ${[...unmatchedBySku].map((n) => esc(n)).join(', ')}. Cek lagi SKU di Stock Management atau di file, lalu import ulang.</div>` : ''}
+      ${unmatchedByName.size ? `<div class="hint" style="margin-top:8px;color:#B84A3E;">⚠️ Baris dengan produk berikut <b>dilewati</b> karena nama produknya nggak ketemu di Stock Management: ${[...unmatchedByName].map((n) => esc(n)).join(', ')}. Samakan dulu nama produknya, atau petakan kolom SKU biar lebih presisi.</div>` : ''}
       ${newChannelNames.length ? `<div class="hint" style="margin-top:8px;">ℹ️ Channel baru akan otomatis dibuat: <b>${newChannelNames.map((n) => esc(n)).join(', ')}</b>.</div>` : ''}
-      ${!validGroups.length ? `<div class="empty-note" style="margin-top:12px;">Nggak ada transaksi valid buat diimpor. Cek lagi mapping kolom atau nama produknya.</div>` : ''}
+      ${!validGroups.length ? `<div class="empty-note" style="margin-top:12px;">Nggak ada transaksi valid buat diimpor. Cek lagi mapping kolom atau SKU/nama produknya.</div>` : ''}
     `;
     document.getElementById('btnConfirmImportSales').disabled = !validGroups.length;
   }
@@ -6911,7 +6989,7 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
       const header = {
         date: g.date, channelId: g.channelId, externalOrderId: g.externalOrderId,
         paymentMethod: g.paymentMethod, paymentStatus: g.paymentStatus || 'Lunas',
-        transactionStatus: g.markCompleted ? 'completed' : 'pending',
+        transactionStatus: g.transactionStatus,
         adminFee: g.adminFee, notes: '', importedFrom: 'excel_import',
       };
       const items = g.validItems.map((it) => ({ productId: it.productId, locationId: g.defaultLocationId, qty: it.qty, sellPrice: it.sellPrice, discount: it.discount }));
@@ -6947,6 +7025,7 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
         const loc = S.locationById(it.locationId);
         const subtotal = it.qty * it.sellPrice - it.discount;
         rows.push({
+          'No. Transaksi': transactionNumber(t),
           'Tanggal': t.date,
           'Channel': channel ? channel.name : '–',
           'External Order ID': t.externalOrderId || '',
@@ -6981,20 +7060,31 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
     const summaryData = [
       ['Laporan Periode', periodLabel],
       ['Rentang Tanggal', `${report.start} s/d ${report.end}`],
+      ['Total Order', report.totalOrders],
+      ['Total Qty Terjual', report.totalQty],
       ['Total Omzet', report.totalRevenue],
       ['Total Modal (COGS)', report.totalCOGS],
       ['Untung Kotor', report.grossProfit],
+      ['Margin Kotor (%)', Number(report.marginGrossPct.toFixed(1))],
+      ['Biaya Admin/Platform', report.totalAdminFee],
       ['Total Pengeluaran', report.totalExpenses],
       ['Untung Bersih', report.netProfit],
-      ['Total Qty Terjual', report.totalQty],
+      ['Margin Bersih (%)', Number(report.marginNetPct.toFixed(1))],
+      ['Uang Masuk (kas, transaksi Lunas)', report.cashIn],
+      ['Uang Keluar (kas)', report.cashOut],
+      ['Saldo Kas Periode Ini', report.netCashFlow],
     ];
     const wsSummary = XLSX.utils.aoa_to_sheet(summaryData);
 
-    const salesData = report.salesInRange.slice().sort((a, b) => a.date.localeCompare(b.date)).map((s) => ({
-      'Tanggal': s.date, 'Produk': s.productName, 'Channel': s.channel || 'Offline Store',
-      'Qty': s.qty, 'Harga Jual/Unit': s.sellPriceAtSale, 'Harga Modal/Unit': s.costPriceAtSale,
-      'Omzet': s.qty * s.sellPriceAtSale, 'Untung': s.qty * (s.sellPriceAtSale - s.costPriceAtSale),
-    }));
+    const salesData = report.salesInRange.slice().sort((a, b) => a.date.localeCompare(b.date)).map((s) => {
+      const txn = S.state.salesTransactions.find((x) => x.id === s.transactionId);
+      return {
+        'No. Transaksi': txn ? transactionNumber(txn) : '–',
+        'Tanggal': s.date, 'Produk': s.productName, 'Channel': s.channel || 'Lainnya',
+        'Qty': s.qty, 'Harga Jual/Unit': s.sellPriceAtSale, 'Diskon': s.discount, 'Harga Modal/Unit': s.costPriceAtSale,
+        'Omzet': s.qty * s.sellPriceAtSale - s.discount, 'Untung': (s.qty * s.sellPriceAtSale - s.discount) - (s.qty * s.costPriceAtSale),
+      };
+    });
     const wsSales = XLSX.utils.json_to_sheet(salesData.length ? salesData : [{ 'Info': 'Tidak ada transaksi di periode ini' }]);
 
     const expenseData = report.expensesInRange.slice().sort((a, b) => a.date.localeCompare(b.date)).map((e) => ({
@@ -7009,6 +7099,7 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
     XLSX.writeFile(wb, `Laporan_${periodLabel.replace(/\s+/g, '_')}_Charmory_${S.todayStr()}.xlsx`);
     C.showToast('File Excel laporan berhasil diunduh.', 'success');
   }
+
 
   /* ---------- TAB: PENGELUARAN ---------- */
   function renderPengeluaran() {
@@ -7114,25 +7205,74 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
     return { start: today, end: today };
   }
 
+  // ---------------------------------------------------------------------
+  // SUMBER TUNGGAL KEBENARAN buat Progress Penjualan/Laporan.
+  // Digabung langsung dari salesTransactions + salesTransactionItems (data
+  // yang sama yang diisi oleh "Catat Transaksi Baru" & "Import Excel/CSV"),
+  // BUKAN dari state.sales lama — supaya satu transaksi otomatis kelihatan
+  // di sini begitu dicatat/diimport, tanpa perlu langkah tambahan apapun.
+  // Hanya transaksi berstatus "completed" yang dihitung (stoknya memang
+  // sudah kepotong beneran); pending/cancelled/returned sengaja dilewati.
+  // ---------------------------------------------------------------------
+  function buildCompletedSalesJoin() {
+    const txnMap = new Map(S.state.salesTransactions.map((t) => [t.id, t]));
+    const items = [];
+    const cashInByTxn = new Map();
+    S.state.salesTransactionItems.forEach((it) => {
+      const txn = txnMap.get(it.transactionId);
+      if (!txn || txn.transactionStatus !== 'completed') return;
+      const product = S.productById(it.productId);
+      const channel = S.channelById(txn.channelId);
+      const lineRevenue = it.qty * it.sellPrice - (it.discount || 0);
+      items.push({
+        date: txn.date, transactionId: txn.id, channel: channel ? channel.name : 'Lainnya',
+        productId: it.productId, productName: product ? product.name : '(produk dihapus)',
+        qty: it.qty, sellPriceAtSale: it.sellPrice, discount: it.discount || 0, costPriceAtSale: it.costPriceAtSale,
+      });
+      if (txn.paymentStatus === 'Lunas') cashInByTxn.set(txn.id, (cashInByTxn.get(txn.id) || 0) + lineRevenue);
+    });
+    // uang masuk beneran = transaksi completed & sudah Lunas, dikurangi biaya admin/platform
+    const cashInRecords = [];
+    S.state.salesTransactions.forEach((t) => {
+      if (t.transactionStatus === 'completed' && t.paymentStatus === 'Lunas') {
+        cashInRecords.push({ date: t.date, value: (cashInByTxn.get(t.id) || 0) - (t.adminFee || 0) });
+      }
+    });
+    return { items, cashInRecords };
+  }
+
   function computeReport(period) {
     const { start, end } = getPeriodRange(period);
-    const salesInRange = S.state.sales.filter(s => s.date >= start && s.date <= end);
+    const { items: allItems, cashInRecords: allCashInRecords } = buildCompletedSalesJoin();
+    const salesInRange = allItems.filter(s => s.date >= start && s.date <= end);
+    const completedTxnsInRange = S.state.salesTransactions.filter(t => t.transactionStatus === 'completed' && t.date >= start && t.date <= end);
     const expensesInRange = S.state.expenses.filter(e => e.date >= start && e.date <= end);
 
-    const totalRevenue = salesInRange.reduce((sum, s) => sum + (s.qty * s.sellPriceAtSale), 0);
+    const totalRevenue = salesInRange.reduce((sum, s) => sum + (s.qty * s.sellPriceAtSale - s.discount), 0);
     const totalCOGS = salesInRange.reduce((sum, s) => sum + (s.qty * s.costPriceAtSale), 0);
     const grossProfit = totalRevenue - totalCOGS;
+    const totalAdminFee = completedTxnsInRange.reduce((sum, t) => sum + (t.adminFee || 0), 0);
     const totalExpenses = expensesInRange.reduce((sum, e) => sum + e.amount, 0);
-    const netProfit = grossProfit - totalExpenses;
+    const netProfit = grossProfit - totalAdminFee - totalExpenses;
     const totalQty = salesInRange.reduce((sum, s) => sum + s.qty, 0);
+    const totalOrders = completedTxnsInRange.length;
+    const marginGrossPct = totalRevenue > 0 ? (grossProfit / totalRevenue) * 100 : 0;
+    const marginNetPct = totalRevenue > 0 ? (netProfit / totalRevenue) * 100 : 0;
+
+    // cash flow: hanya transaksi yang statusnya "Lunas" dihitung sebagai kas beneran masuk
+    const cashInInRange = allCashInRecords.filter(r => r.date >= start && r.date <= end);
+    const cashIn = cashInInRange.reduce((sum, r) => sum + r.value, 0);
+    const cashOut = totalExpenses;
+    const netCashFlow = cashIn - cashOut;
 
     // per produk breakdown
     const byProduct = {};
     salesInRange.forEach((s) => {
       if (!byProduct[s.productName]) byProduct[s.productName] = { qty: 0, revenue: 0, profit: 0 };
+      const rev = s.qty * s.sellPriceAtSale - s.discount;
       byProduct[s.productName].qty += s.qty;
-      byProduct[s.productName].revenue += s.qty * s.sellPriceAtSale;
-      byProduct[s.productName].profit += s.qty * (s.sellPriceAtSale - s.costPriceAtSale);
+      byProduct[s.productName].revenue += rev;
+      byProduct[s.productName].profit += rev - (s.qty * s.costPriceAtSale);
     });
 
     // by expense category
@@ -7141,42 +7281,53 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
       byCategory[e.category] = (byCategory[e.category] || 0) + e.amount;
     });
 
-    // by channel (Shopee / TikTok Shop / Offline Store)
+    // by channel
     const byChannel = {};
     salesInRange.forEach((s) => {
-      const ch = s.channel || 'Offline Store';
+      const ch = s.channel || 'Lainnya';
       if (!byChannel[ch]) byChannel[ch] = { qty: 0, revenue: 0, profit: 0 };
+      const rev = s.qty * s.sellPriceAtSale - s.discount;
       byChannel[ch].qty += s.qty;
-      byChannel[ch].revenue += s.qty * s.sellPriceAtSale;
-      byChannel[ch].profit += s.qty * (s.sellPriceAtSale - s.costPriceAtSale);
+      byChannel[ch].revenue += rev;
+      byChannel[ch].profit += rev - (s.qty * s.costPriceAtSale);
     });
 
-    // distribusi untung/rugi/impas, dibobot berdasarkan omzet tiap transaksi
+    // distribusi untung/rugi/impas, dibobot berdasarkan omzet tiap baris produk
     const profitLoss = { untung: 0, rugi: 0, impas: 0 };
     salesInRange.forEach((s) => {
-      const profit = s.qty * (s.sellPriceAtSale - s.costPriceAtSale);
-      const rev = s.qty * s.sellPriceAtSale;
+      const rev = s.qty * s.sellPriceAtSale - s.discount;
+      const profit = rev - (s.qty * s.costPriceAtSale);
       if (profit > 0) profitLoss.untung += rev;
       else if (profit < 0) profitLoss.rugi += rev;
       else profitLoss.impas += rev;
     });
 
-    // tren omzet dari waktu ke waktu, granularitas menyesuaikan periode
-    const trend = computeTrend(period, start, end);
+    // tren dari waktu ke waktu, granularitas menyesuaikan periode
+    const trend = computeSeriesPoints(period, start, end, allItems, (s) => s.qty * s.sellPriceAtSale - s.discount);
+    const profitTrend = computeSeriesPoints(period, start, end, allItems, (s) => (s.qty * s.sellPriceAtSale - s.discount) - (s.qty * s.costPriceAtSale));
+    const cashInTrend = computeSeriesPoints(period, start, end, allCashInRecords, (r) => r.value);
+    const cashOutTrend = computeSeriesPoints(period, start, end, S.state.expenses, (e) => e.amount);
 
-    return { start, end, totalRevenue, totalCOGS, grossProfit, totalExpenses, netProfit, totalQty, byProduct, byCategory, byChannel, profitLoss, trend, salesInRange, expensesInRange };
+    return {
+      start, end, totalRevenue, totalCOGS, grossProfit, totalAdminFee, totalExpenses, netProfit,
+      marginGrossPct, marginNetPct, totalQty, totalOrders, cashIn, cashOut, netCashFlow,
+      byProduct, byCategory, byChannel, profitLoss, trend, profitTrend, cashInTrend, cashOutTrend,
+      salesInRange, expensesInRange,
+    };
   }
 
-  function computeTrend(period, start, end) {
+  // Bucket generik: jumlahkan value dari `records` (harus punya field .date) per titik waktu,
+  // granularitas ikut `period` — dipakai bareng buat Tren Omzet, Tren Laba, dan Tren Kas.
+  function computeSeriesPoints(period, start, end, records, valueFn) {
     const MONTH_SHORT_ID = ['Jan','Feb','Mar','Apr','Mei','Jun','Jul','Agu','Sep','Okt','Nov','Des'];
     const points = [];
 
     if (period === 'total') {
-      // agregasi per bulan dari seluruh riwayat penjualan yang ada
+      // agregasi per bulan dari seluruh riwayat yang ada
       const byMonth = {};
-      S.state.sales.forEach((s) => {
-        const key = s.date.slice(0, 7); // YYYY-MM
-        byMonth[key] = (byMonth[key] || 0) + s.qty * s.sellPriceAtSale;
+      records.forEach((r) => {
+        const key = r.date.slice(0, 7); // YYYY-MM
+        byMonth[key] = (byMonth[key] || 0) + valueFn(r);
       });
       const sortedMonths = Object.keys(byMonth).sort();
       if (!sortedMonths.length) return [];
@@ -7194,8 +7345,8 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
     }
 
     const byDate = {};
-    S.state.sales.forEach((s) => {
-      if (s.date >= rangeStart && s.date <= rangeEnd) byDate[s.date] = (byDate[s.date] || 0) + s.qty * s.sellPriceAtSale;
+    records.forEach((r) => {
+      if (r.date >= rangeStart && r.date <= rangeEnd) byDate[r.date] = (byDate[r.date] || 0) + valueFn(r);
     });
 
     let cur = rangeStart;
@@ -7220,15 +7371,20 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
     const statEl = document.getElementById('reportStatGrid');
     const cards = [
       { label: 'Total Penjualan (Omzet)', value: rp(report.totalRevenue), bg: 'var(--sakura-pale)', fg: 'var(--sakura-deep)', icon: ICON.receipt },
+      { label: 'Total Order', value: report.totalOrders.toLocaleString('id-ID'), bg: 'var(--bg-alt)', fg: 'var(--ink-soft)', icon: ICON.receipt, sub: `${report.totalQty.toLocaleString('id-ID')} pcs terjual` },
       { label: 'Laba Kotor', value: rp(report.grossProfit), bg: 'var(--sage-pale)', fg: 'var(--sage-deep)', icon: ICON.trend },
+      { label: 'Margin Kotor', value: `${report.marginGrossPct.toFixed(1)}%`, bg: 'var(--sage-pale)', fg: 'var(--sage-deep)', icon: ICON.trend },
+      { label: 'Biaya Admin/Platform', value: rp(report.totalAdminFee), bg: 'var(--amber-pale)', fg: 'var(--amber)', icon: ICON.wallet },
       { label: 'Total Pengeluaran', value: rp(report.totalExpenses), bg: 'var(--amber-pale)', fg: 'var(--amber)', icon: ICON.wallet },
       { label: 'Laba Bersih', value: rp(report.netProfit), bg: report.netProfit >= 0 ? 'var(--sage-pale)' : '#FBEEEA', fg: report.netProfit >= 0 ? 'var(--sage-deep)' : '#B84A3E', icon: report.netProfit >= 0 ? ICON.trend : ICON.trendDown },
+      { label: 'Margin Bersih', value: `${report.marginNetPct.toFixed(1)}%`, bg: report.netProfit >= 0 ? 'var(--sage-pale)' : '#FBEEEA', fg: report.netProfit >= 0 ? 'var(--sage-deep)' : '#B84A3E', icon: report.netProfit >= 0 ? ICON.trend : ICON.trendDown },
     ];
     statEl.innerHTML = cards.map(c => `
       <div class="stat-card">
         <div class="icon-badge" style="background:${c.bg};color:${c.fg};">${c.icon}</div>
         <div class="label">${c.label}</div>
         <div class="value" style="font-size:22px;">${c.value}</div>
+        ${c.sub ? `<div style="font-size:11px;color:var(--ink-faint);margin-top:4px;">${c.sub}</div>` : ''}
       </div>`).join('');
 
     // ---- CHART: Tren Penjualan ----
@@ -7241,13 +7397,29 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
     } else {
       trendHintEl.textContent = '';
     }
-    CH.renderLineChart('chartTrend', report.trend, { color: CH.COLORS.sakuraDeep });
+    document.getElementById('chartTrend').innerHTML = CH.lineChart(report.trend, { color: CH.COLORS.sakuraDeep });
 
     // ---- CHART: Produk Terlaris ----
     const bestSellerData = Object.entries(report.byProduct)
       .map(([name, d]) => ({ label: name, value: d.qty }))
       .sort((a, b) => b.value - a.value);
-    CH.renderHorizontalBarChart('chartBestSellers', bestSellerData, { valueLabel: 'terjual' });
+    document.getElementById('chartBestSellers').innerHTML = CH.horizontalBarChart(bestSellerData);
+
+    // ---- CHART: Omzet vs Laba (tren) ----
+    const omzetLabaSeries = [
+      { key: 'omzet', label: 'Omzet', color: CH.COLORS.sakuraDeep, points: report.trend },
+      { key: 'laba', label: 'Laba Kotor', color: CH.COLORS.sageDeep, points: report.profitTrend },
+    ];
+    document.getElementById('chartOmzetLaba').innerHTML = CH.multiLineChart(omzetLabaSeries, { emptyText: 'Belum ada penjualan untuk digambarkan di periode ini.' });
+
+    // ---- CHART: Produk Paling Menguntungkan (beda dari Produk Terlaris — ini berdasarkan laba Rp, bukan qty) ----
+    const mostProfitableData = Object.entries(report.byProduct)
+      .map(([name, d]) => ({ label: name, value: d.profit }))
+      .sort((a, b) => b.value - a.value);
+    document.getElementById('chartMostProfitable').innerHTML = CH.horizontalBarChart(mostProfitableData, {
+      format: 'rupiah', barColor: CH.COLORS.sageDeep, barColorAlt: CH.COLORS.sage,
+      emptyText: 'Belum ada penjualan buat dihitung labanya di periode ini.',
+    });
 
     // ---- CHART: Distribusi Untung & Rugi ----
     const plSegments = [
@@ -7255,13 +7427,13 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
       { key: 'rugi', label: 'Omzet dari transaksi rugi', value: report.profitLoss.rugi, color: CH.COLORS.danger },
       { key: 'impas', label: 'Omzet dari transaksi impas', value: report.profitLoss.impas, color: CH.COLORS.inkFaint },
     ];
-    const plTotal = plSegments.reduce((s, x) => s + x.value, 0);
-    const untungPct = plTotal > 0 ? Math.round((report.profitLoss.untung / plTotal) * 100) : 0;
-    CH.renderDonutChart('chartProfitLoss', plSegments, { centerText: { big: `${untungPct}%`, small: 'omzet untung' } });
+    document.getElementById('chartProfitLoss').innerHTML = CH.donutChart(plSegments);
 
-    // ---- CHART: Perbandingan Channel (klik bar buat filter breakdown produk di bawahnya) ----
-    const channelOrder = ['Shopee', 'TikTok Shop', 'Offline Store'];
-    const presentChannels = Array.from(new Set([...channelOrder, ...Object.keys(report.byChannel)]));
+    // ---- CHART: Perbandingan Channel ----
+    // urutan channel ikut Kelola Channel (sort_order), bukan lagi nama yang di-hardcode
+    const activeChannelNames = S.state.salesChannels.slice().sort((a, b) => a.sortOrder - b.sortOrder).map((c) => c.name);
+    const presentChannels = Array.from(new Set([...activeChannelNames, ...Object.keys(report.byChannel)]));
+    document.getElementById('channelChartHint').textContent = activeChannelNames.length ? activeChannelNames.join(' · ') : 'Kelola channel lewat tombol di atas';
     const channelData = presentChannels
       .filter((ch) => report.byChannel[ch])
       .map((ch) => ({
@@ -7275,14 +7447,33 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
       { key: 'Omzet', label: 'Omzet', color: CH.COLORS.sakuraDeep },
       { key: 'Laba', label: 'Laba Kotor', color: '#C9DECF' },
     ];
-    CH.renderGroupedBarChart('chartChannel', channelData, channelLegend, {
-      onClick: (channelLabel) => {
-        reportChannelFilter = reportChannelFilter === channelLabel ? null : channelLabel;
-        renderProductBreakdown(report);
-      },
-    });
+    document.getElementById('chartChannel').innerHTML = channelData.length
+      ? CH.groupedBarChart(channelData, channelLegend)
+      : `<div class="chart-empty">Belum ada penjualan tercatat per channel di periode ini.</div>`;
 
-    renderProductBreakdown(report);
+    // ---- CHART: Cash Flow ----
+    const cashFlowSeries = [
+      { key: 'masuk', label: 'Uang Masuk', color: CH.COLORS.sageDeep, points: report.cashInTrend },
+      { key: 'keluar', label: 'Uang Keluar', color: CH.COLORS.danger, points: report.cashOutTrend },
+    ];
+    document.getElementById('chartCashFlow').innerHTML = CH.multiLineChart(cashFlowSeries, { emptyText: 'Belum ada kas masuk/keluar tercatat di periode ini.' });
+
+    const cashEl = document.getElementById('reportCashSummary');
+    cashEl.innerHTML = `
+      <div class="plat-row"><span class="plat-name" style="width:auto;flex:1;">Uang Masuk (transaksi Lunas)</span><span class="plat-count" style="width:auto;color:var(--sage-deep);font-weight:700;">${rp(report.cashIn)}</span></div>
+      <div class="plat-row"><span class="plat-name" style="width:auto;flex:1;">Uang Keluar (pengeluaran)</span><span class="plat-count" style="width:auto;color:#B84A3E;font-weight:700;">${rp(report.cashOut)}</span></div>
+      <div class="plat-row"><span class="plat-name" style="width:auto;flex:1;font-weight:700;">Saldo Kas Periode Ini</span><span class="plat-count" style="width:auto;font-weight:800;color:${report.netCashFlow>=0?'var(--sage-deep)':'#B84A3E'};">${rp(report.netCashFlow)}</span></div>
+      <div class="hint" style="margin-top:10px;">Uang Masuk cuma menghitung transaksi selesai berstatus "Lunas" (dikurangi biaya admin/platform). Transaksi "Belum Bayar"/"Sebagian" belum dianggap kas masuk.</div>
+    `;
+
+    // breakdown per produk
+    const prodEl = document.getElementById('reportByProduct');
+    const prodEntries = Object.entries(report.byProduct).sort((a,b) => b[1].revenue - a[1].revenue);
+    prodEl.innerHTML = prodEntries.length ? prodEntries.map(([name, d]) => `
+      <div class="plat-row">
+        <span class="plat-name" style="width:auto;flex:1;">${esc(name)}</span>
+        <span class="plat-count" style="width:auto;">${d.qty}x · ${rp(d.revenue)} · <span style="color:${d.profit>=0?'var(--sage-deep)':'#B84A3E'}">untung ${rp(d.profit)}</span></span>
+      </div>`).join('') : `<div class="empty-note">Belum ada penjualan di periode ini.</div>`;
 
     // breakdown per kategori pengeluaran
     const expEl = document.getElementById('reportByExpense');
@@ -7292,39 +7483,6 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
         <span class="plat-name" style="width:auto;flex:1;">${esc(cat)}</span>
         <span class="plat-count" style="width:auto;color:#B84A3E;">${rp(amt)}</span>
       </div>`).join('') : `<div class="empty-note">Belum ada pengeluaran di periode ini.</div>`;
-  }
-
-  // breakdown per produk — dipisah dari renderLaporan supaya bisa di-render ulang sendiri
-  // begitu user klik salah satu bar channel (cross-filter), tanpa perlu gambar ulang semua chart.
-  function renderProductBreakdown(report) {
-    const prodEl = document.getElementById('reportByProduct');
-    let sourceRows = report.salesInRange;
-    if (reportChannelFilter) {
-      sourceRows = sourceRows.filter((s) => (s.channel || 'Offline Store') === reportChannelFilter);
-    }
-    const byProductFiltered = {};
-    sourceRows.forEach((s) => {
-      if (!byProductFiltered[s.productName]) byProductFiltered[s.productName] = { qty: 0, revenue: 0, profit: 0 };
-      byProductFiltered[s.productName].qty += s.qty;
-      byProductFiltered[s.productName].revenue += s.qty * s.sellPriceAtSale;
-      byProductFiltered[s.productName].profit += s.qty * (s.sellPriceAtSale - s.costPriceAtSale);
-    });
-    const prodEntries = Object.entries(byProductFiltered).sort((a,b) => b[1].revenue - a[1].revenue);
-
-    const filterBadge = reportChannelFilter ? `
-      <div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;font-size:12px;">
-        <span class="channel-badge" style="background:var(--sakura-pale);color:var(--sakura-deep);">Difilter: ${esc(reportChannelFilter)}</span>
-        <button type="button" id="btnClearChannelFilter" style="background:none;border:none;color:var(--ink-faint);text-decoration:underline;cursor:pointer;font-size:12px;">Hapus filter</button>
-      </div>` : '';
-
-    prodEl.innerHTML = filterBadge + (prodEntries.length ? prodEntries.map(([name, d]) => `
-      <div class="plat-row">
-        <span class="plat-name" style="width:auto;flex:1;">${esc(name)}</span>
-        <span class="plat-count" style="width:auto;">${d.qty}x · ${rp(d.revenue)} · <span style="color:${d.profit>=0?'var(--sage-deep)':'#B84A3E'}">untung ${rp(d.profit)}</span></span>
-      </div>`).join('') : `<div class="empty-note">Belum ada penjualan${reportChannelFilter ? ' dari channel ini' : ''} di periode ini.</div>`);
-
-    const clearBtn = document.getElementById('btnClearChannelFilter');
-    if (clearBtn) clearBtn.addEventListener('click', () => { reportChannelFilter = null; renderProductBreakdown(report); });
   }
 
   /* ---------- SHARED DELETE ---------- */
@@ -7374,8 +7532,6 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
       bindTxnRowEvents();
     });
     document.getElementById('txn-admin-fee').addEventListener('input', updateTxnTotals);
-    document.getElementById('txn-channel').addEventListener('change', refreshAllRowPrices);
-    document.getElementById('txn-date').addEventListener('change', refreshAllRowContentOptions);
     document.getElementById('btnExportSalesExcel').addEventListener('click', exportSalesToExcel);
 
     document.getElementById('btnManageChannels').addEventListener('click', openChannelModal);
@@ -7406,7 +7562,7 @@ const IDEA_BANK = {"Lifestyle": ["What's In My Bag", "What's On My Desk", "Desk 
 
     document.getElementById('btnExportReportExcel').addEventListener('click', exportReportToExcel);
     document.querySelectorAll('.period-chip').forEach((c) => {
-      c.addEventListener('click', () => { reportPeriod = c.dataset.period; reportChannelFilter = null; renderLaporan(); });
+      c.addEventListener('click', () => { reportPeriod = c.dataset.period; renderLaporan(); });
     });
 
     document.getElementById('btnCancelSalesConfirm').addEventListener('click', closeSalesConfirm);
